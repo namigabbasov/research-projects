@@ -1,1 +1,1 @@
-This repository contains the replication files for my current working papers. 
+This repository contains the replication files for my current working papers. Each subrepository(folder) in this repository is a location for each working working. I am adding codes and other materials after I complete the analysis. So more codes will be added once the analysis is complete. 
