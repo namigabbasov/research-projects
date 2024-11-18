@@ -1,0 +1,1310 @@
+---
+title: "Model Specifications"
+format: html
+editor: visual
+---
+## Libraries 
+```{r}
+library(dplyr)
+library(readxl)
+library(SurvMetrics)
+library(caret)
+library(randomForestSRC)
+library(survival)  
+library(pec)
+library(ggplot2)
+library(expss)
+library(patchwork)
+```
+
+
+## Load Data
+```{r}
+library(dplyr)
+episodes<-read_excel("episodes.xlsx")
+eps <- episodes %>% filter(intensity_level == 2)
+
+
+# Subset specified columns
+eps <- select(eps, time_to_recur_any, recur_any, dis, cease, govvic, rebvic, lowac, peace, recur_side, time_to_recur)
+
+eps <- eps %>%
+  filter(!is.na(time_to_recur_any))
+
+
+
+eps<-na.omit(eps)
+```
+
+## Separate Models
+```{r}
+### Base Model
+
+
+# Applying labels and adding additional variables
+episodes_a <- apply_labels(episodes, 
+                           time_to_recur_any = "Time to Recur Any", 
+                           recur_any = "War Recurrence Any",  
+                           peace = "Peace Agreement",
+                           cease = "Ceasefire", 
+                           govvic = "Government Victory", 
+                           rebvic = "Rebel Victory", 
+                           lowac = "Low Activity", 
+                           dis = "Actor Ceases",
+                           pko_u = "Peacekeeping Operations", 
+                           log_dur = "Log Duration", 
+                           cold_war = "Cold War", 
+                           p_polity2 = "Polity Score", 
+                           fe_etfra = "Ethnic Fractionalization", 
+                           log_gdp = "Log GDP per Capita",
+                           log_pop = "Log Population",
+                           al_language2000 = "Language Fractionalization",
+                           ps_original = "Power-Sharing",
+                           al_religion2000 = "Religion Fractionalization",
+                           fe_cultdiv = "Cultural Diversity",
+                           veto_u = "Veto Players",
+                           W4 = "Coalition Size")
+
+# Subsetting data including all variables except specific ones
+X_base <- subset(episodes_a, select = c(time_to_recur_any, recur_any, pko_u, log_dur, cold_war, log_gdp, log_pop, p_polity2, fe_etfra, al_language2000, ps_original, al_religion2000, fe_cultdiv, veto_u, W4))
+X_base <- na.omit(X_base)
+X_base <- X_base %>% mutate(across(everything(), as.numeric))
+
+# Initialization
+metrics_cox_base <- numeric(20)
+metrics_rsf_base <- numeric(20)
+
+# Run models 20 times for base model
+for (i in 1:20) {
+  index_data <- createFolds(1:nrow(X_base), 2)
+  train_indices <- index_data[[1]]
+  test_indices <- index_data[[2]]
+  
+  train_data_base <- X_base[train_indices, ]
+  test_data_base <- X_base[test_indices, ]
+  
+  fitrsf_base <- rfsrc(Surv(time_to_recur_any, recur_any) ~ ., data = train_data_base, nsplit = 3, ntree = 500)
+  mat_rsf_base <- predict(fitrsf_base, test_data_base)$survival
+  
+  dis_time <- fitrsf_base$time.interest
+  fitcox_base <- coxph(Surv(time_to_recur_any, recur_any) ~ ., data = train_data_base, x = TRUE)
+  mat_cox_base <- predictSurvProb(fitcox_base, test_data_base, dis_time)
+  
+  med_index <- median(1:length(dis_time))
+  surv_obj <- Surv(test_data_base$time_to_recur_any, test_data_base$recur_any)
+  
+  # C index for Cox
+  metrics_cox_base[i] <- Cindex(surv_obj, predicted = mat_cox_base[, med_index])
+  # C index for RSF
+  metrics_rsf_base[i] <- Cindex(surv_obj, predicted = mat_rsf_base[, med_index])
+}
+
+data_CI_base <- data.frame('Cindex' = c(metrics_cox_base, metrics_rsf_base),
+                           'model' = c(rep('Cox Base', 20), rep('RSF Base', 20)))
+
+# Plotting base model C-index
+plot_base <- ggplot(data_CI_base, aes(x = model, y = Cindex, fill = model)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("#FFBBCC", "#88CCFF")) +
+  labs(title = "C-index Comparison for Base Cox and RSF Models",
+       x = "Model",
+       y = "C-index")
+
+print(plot_base)
+
+
+
+
+
+
+
+
+### With Peace
+
+
+
+# Subsetting data including 'peace'
+X_with_peace <- subset(episodes_a, select = c(time_to_recur_any, recur_any, peace, pko_u, log_dur, cold_war, log_gdp, log_pop, p_polity2, fe_etfra, al_language2000, ps_original, al_religion2000, fe_cultdiv, veto_u, W4))
+X_with_peace <- na.omit(X_with_peace)
+X_with_peace <- X_with_peace %>% mutate(across(everything(), as.numeric))
+
+# Initialization
+metrics_cox_with_peace <- numeric(20)
+metrics_rsf_with_peace <- numeric(20)
+
+# Run the models 20 times for the model with 'peace'
+for (i in 1:20) {
+  index_data <- createFolds(1:nrow(X_with_peace), 2)
+  train_indices <- index_data[[1]]
+  test_indices <- index_data[[2]]
+  
+  train_data_with_peace <- X_with_peace[train_indices, ]
+  test_data_with_peace <- X_with_peace[test_indices, ]
+  
+  fitrsf_with_peace <- rfsrc(Surv(time_to_recur_any, recur_any) ~ ., data = train_data_with_peace, nsplit = 3, ntree = 500)
+  mat_rsf_with_peace <- predict(fitrsf_with_peace, test_data_with_peace)$survival
+  
+  dis_time <- fitrsf_with_peace$time.interest
+  fitcox_with_peace <- coxph(Surv(time_to_recur_any, recur_any) ~ ., data = train_data_with_peace, x = TRUE)
+  mat_cox_with_peace <- predictSurvProb(fitcox_with_peace, test_data_with_peace, dis_time)
+  
+  med_index <- median(1:length(dis_time))
+  surv_obj <- Surv(test_data_with_peace$time_to_recur_any, test_data_with_peace$recur_any)
+  
+  # C index for Cox
+  metrics_cox_with_peace[i] <- Cindex(surv_obj, predicted = mat_cox_with_peace[, med_index])
+  # C index for RSF
+  metrics_rsf_with_peace[i] <- Cindex(surv_obj, predicted = mat_rsf_with_peace[, med_index])
+}
+
+data_CI_with_peace <- data.frame('Cindex' = c(metrics_cox_with_peace, metrics_rsf_with_peace),
+                                 'model' = c(rep('Cox with Peace', 20), rep('RSF with Peace', 20)))
+
+# Plotting model with 'peace' C-index
+plot_with_peace <- ggplot(data_CI_with_peace, aes(x = model, y = Cindex, fill = model)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("#FFC300", "#DAF7A6")) +
+  labs(title = "C-index Comparison for Cox and RSF Models with Peace Agreement",
+       x = "Model",
+       y = "C-index")
+
+print(plot_with_peace)
+
+
+
+
+
+### Cease 
+# Subsetting data including 'cease'
+X_with_cease <- subset(episodes_a, select = c(time_to_recur_any, recur_any, cease, pko_u, log_dur, cold_war, log_gdp, log_pop, p_polity2, fe_etfra, al_language2000, ps_original, al_religion2000, fe_cultdiv, veto_u, W4))
+X_with_cease <- na.omit(X_with_cease)
+X_with_cease <- X_with_cease %>% mutate(across(everything(), as.numeric))
+
+# Initialization
+metrics_cox_with_cease <- numeric(20)
+metrics_rsf_with_cease <- numeric(20)
+
+# Run the models 20 times for the model with 'cease'
+for (i in 1:20) {
+  index_data <- createFolds(1:nrow(X_with_cease), 2)
+  train_indices <- index_data[[1]]
+  test_indices <- index_data[[2]]
+  
+  train_data_with_cease <- X_with_cease[train_indices, ]
+  test_data_with_cease <- X_with_cease[test_indices, ]
+  
+  fitrsf_with_cease <- rfsrc(Surv(time_to_recur_any, recur_any) ~ ., data = train_data_with_cease, nsplit = 3, ntree = 500)
+  mat_rsf_with_cease <- predict(fitrsf_with_cease, test_data_with_cease)$survival
+  
+  dis_time <- fitrsf_with_cease$time.interest
+  fitcox_with_cease <- coxph(Surv(time_to_recur_any, recur_any) ~ ., data = train_data_with_cease, x = TRUE)
+  mat_cox_with_cease <- predictSurvProb(fitcox_with_cease, test_data_with_cease, dis_time)
+  
+  med_index <- median(1:length(dis_time))
+  surv_obj <- Surv(test_data_with_cease$time_to_recur_any, test_data_with_cease$recur_any)
+  
+  # C index for Cox
+  metrics_cox_with_cease[i] <- Cindex(surv_obj, predicted = mat_cox_with_cease[, med_index])
+  # C index for RSF
+  metrics_rsf_with_cease[i] <- Cindex(surv_obj, predicted = mat_rsf_with_cease[, med_index])
+}
+
+data_CI_with_cease <- data.frame('Cindex' = c(metrics_cox_with_cease, metrics_rsf_with_cease),
+                                 'model' = c(rep('Cox with Cease', 20), rep('RSF with Cease', 20)))
+
+# Plotting model with 'cease' C-index
+plot_with_cease <- ggplot(data_CI_with_cease, aes(x = model, y = Cindex, fill = model)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("#FFC300", "#DAF7A6")) +
+  labs(title = "C-index Comparison for Cox and RSF Models with Ceasefire",
+       x = "Model",
+       y = "C-index")
+
+print(plot_with_cease)
+
+
+
+
+
+
+### Gov Victory
+
+# Subsetting data including 'govvic'
+X_with_govvic <- subset(episodes_a, select = c(time_to_recur_any, recur_any, govvic, pko_u, log_dur, cold_war, log_gdp, log_pop, p_polity2, fe_etfra, al_language2000, ps_original, al_religion2000, fe_cultdiv, veto_u, W4))
+X_with_govvic <- na.omit(X_with_govvic)
+X_with_govvic <- X_with_govvic %>% mutate(across(everything(), as.numeric))
+
+# Initialization
+metrics_cox_with_govvic <- numeric(20)
+metrics_rsf_with_govvic <- numeric(20)
+
+# Run the models 20 times for the model with 'govvic'
+for (i in 1:20) {
+  index_data <- createFolds(1:nrow(X_with_govvic), 2)
+  train_indices <- index_data[[1]]
+  test_indices <- index_data[[2]]
+  
+  train_data_with_govvic <- X_with_govvic[train_indices, ]
+  test_data_with_govvic <- X_with_govvic[test_indices, ]
+  
+  fitrsf_with_govvic <- rfsrc(Surv(time_to_recur_any, recur_any) ~ ., data = train_data_with_govvic, nsplit = 3, ntree = 500)
+  mat_rsf_with_govvic <- predict(fitrsf_with_govvic, test_data_with_govvic)$survival
+  
+  dis_time <- fitrsf_with_govvic$time.interest
+  fitcox_with_govvic <- coxph(Surv(time_to_recur_any, recur_any) ~ ., data = train_data_with_govvic, x = TRUE)
+  mat_cox_with_govvic <- predictSurvProb(fitcox_with_govvic, test_data_with_govvic, dis_time)
+  
+  med_index <- median(1:length(dis_time))
+  surv_obj <- Surv(test_data_with_govvic$time_to_recur_any, test_data_with_govvic$recur_any)
+  
+  # C index for Cox
+  metrics_cox_with_govvic[i] <- Cindex(surv_obj, predicted = mat_cox_with_govvic[, med_index])
+  # C index for RSF
+  metrics_rsf_with_govvic[i] <- Cindex(surv_obj, predicted = mat_rsf_with_govvic[, med_index])
+}
+
+data_CI_with_govvic <- data.frame('Cindex' = c(metrics_cox_with_govvic, metrics_rsf_with_govvic),
+                                  'model' = c(rep('Cox with GovVic', 20), rep('RSF with GovVic', 20)))
+
+# Plotting model with 'govvic' C-index
+plot_with_govvic <- ggplot(data_CI_with_govvic, aes(x = model, y = Cindex, fill = model)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("#FFC300", "#DAF7A6")) +
+  labs(title = "C-index Comparison for Cox and RSF Models with Government Victory",
+       x = "Model",
+       y = "C-index")
+
+print(plot_with_govvic)
+
+
+
+
+
+### Rebel Victory 
+
+# Subsetting data including 'rebvic'
+X_with_rebvic <- subset(episodes_a, select = c(time_to_recur_any, recur_any, rebvic, pko_u, log_dur, cold_war, log_gdp, log_pop, p_polity2, fe_etfra, al_language2000, ps_original, al_religion2000, fe_cultdiv, veto_u, W4))
+X_with_rebvic <- na.omit(X_with_rebvic)
+X_with_rebvic <- X_with_rebvic %>% mutate(across(everything(), as.numeric))
+
+# Initialization
+metrics_cox_with_rebvic <- numeric(20)
+metrics_rsf_with_rebvic <- numeric(20)
+
+# Run the models 20 times for the model with 'rebvic'
+for (i in 1:20) {
+  index_data <- createFolds(1:nrow(X_with_rebvic), 2)
+  train_indices <- index_data[[1]]
+  test_indices <- index_data[[2]]
+  
+  train_data_with_rebvic <- X_with_rebvic[train_indices, ]
+  test_data_with_rebvic <- X_with_rebvic[test_indices, ]
+  
+  fitrsf_with_rebvic <- rfsrc(Surv(time_to_recur_any, recur_any) ~ ., data = train_data_with_rebvic, nsplit = 3, ntree = 500)
+  mat_rsf_with_rebvic <- predict(fitrsf_with_rebvic, test_data_with_rebvic)$survival
+  
+  dis_time <- fitrsf_with_rebvic$time.interest
+  fitcox_with_rebvic <- coxph(Surv(time_to_recur_any, recur_any) ~ ., data = train_data_with_rebvic, x = TRUE)
+  mat_cox_with_rebvic <- predictSurvProb(fitcox_with_rebvic, test_data_with_rebvic, dis_time)
+  
+  med_index <- median(1:length(dis_time))
+  surv_obj <- Surv(test_data_with_rebvic$time_to_recur_any, test_data_with_rebvic$recur_any)
+  
+  # C index for Cox
+  metrics_cox_with_rebvic[i] <- Cindex(surv_obj, predicted = mat_cox_with_rebvic[, med_index])
+  # C index for RSF
+  metrics_rsf_with_rebvic[i] <- Cindex(surv_obj, predicted = mat_rsf_with_rebvic[, med_index])
+}
+
+data_CI_with_rebvic <- data.frame('Cindex' = c(metrics_cox_with_rebvic, metrics_rsf_with_rebvic),
+                                  'model' = c(rep('Cox with RebVic', 20), rep('RSF with RebVic', 20)))
+
+# Plotting model with 'rebvic' C-index
+plot_with_rebvic <- ggplot(data_CI_with_rebvic, aes(x = model, y = Cindex, fill = model)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("#FFC300", "#DAF7A6")) +
+  labs(title = "C-index Comparison for Cox and RSF Models with Rebel Victory",
+       x = "Model",
+       y = "C-index")
+
+print(plot_with_rebvic)
+
+
+
+
+### Low activity 
+
+# Subsetting data including 'lowac'
+X_with_lowac <- subset(episodes_a, select = c(time_to_recur_any, recur_any, lowac, pko_u, log_dur, cold_war, log_gdp, log_pop, p_polity2, fe_etfra, al_language2000, ps_original, al_religion2000, fe_cultdiv, veto_u, W4))
+X_with_lowac <- na.omit(X_with_lowac)
+X_with_lowac <- X_with_lowac %>% mutate(across(everything(), as.numeric))
+
+# Initialization
+metrics_cox_with_lowac <- numeric(20)
+metrics_rsf_with_lowac <- numeric(20)
+
+# Run the models 20 times for the model with 'lowac'
+for (i in 1:20) {
+  index_data <- createFolds(1:nrow(X_with_lowac), 2)
+  train_indices <- index_data[[1]]
+  test_indices <- index_data[[2]]
+  
+  train_data_with_lowac <- X_with_lowac[train_indices, ]
+  test_data_with_lowac <- X_with_lowac[test_indices, ]
+  
+  fitrsf_with_lowac <- rfsrc(Surv(time_to_recur_any, recur_any) ~ ., data = train_data_with_lowac, nsplit = 3, ntree = 500)
+  mat_rsf_with_lowac <- predict(fitrsf_with_lowac, test_data_with_lowac)$survival
+  
+  dis_time <- fitrsf_with_lowac$time.interest
+  fitcox_with_lowac <- coxph(Surv(time_to_recur_any, recur_any) ~ ., data = train_data_with_lowac, x = TRUE)
+  mat_cox_with_lowac <- predictSurvProb(fitcox_with_lowac, test_data_with_lowac, dis_time)
+  
+  med_index <- median(1:length(dis_time))
+  surv_obj <- Surv(test_data_with_lowac$time_to_recur_any, test_data_with_lowac$recur_any)
+  
+  # C index for Cox
+  metrics_cox_with_lowac[i] <- Cindex(surv_obj, predicted = mat_cox_with_lowac[, med_index])
+  # C index for RSF
+  metrics_rsf_with_lowac[i] <- Cindex(surv_obj, predicted = mat_rsf_with_lowac[, med_index])
+}
+
+data_CI_with_lowac <- data.frame('Cindex' = c(metrics_cox_with_lowac, metrics_rsf_with_lowac),
+                                 'model' = c(rep('Cox with LowAC', 20), rep('RSF with LowAC', 20)))
+
+# Plotting model with 'lowac' C-index
+plot_with_lowac <- ggplot(data_CI_with_lowac, aes(x = model, y = Cindex, fill = model)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("#FFC300", "#DAF7A6")) +
+  labs(title = "C-index Comparison for Cox and RSF Models with Low Activity",
+       x = "Model",
+       y = "C-index")
+
+print(plot_with_lowac)
+
+
+
+
+
+### Actor Cease to Exist 
+
+# Subsetting data including 'dis'
+X_with_dis <- subset(episodes_a, select = c(time_to_recur_any, recur_any, dis, pko_u, log_dur, cold_war, log_gdp, log_pop, p_polity2, fe_etfra, al_language2000, ps_original, al_religion2000, fe_cultdiv, veto_u, W4))
+X_with_dis <- na.omit(X_with_dis)
+X_with_dis <- X_with_dis %>% mutate(across(everything(), as.numeric))
+
+# Initialization
+metrics_cox_with_dis <- numeric(20)
+metrics_rsf_with_dis <- numeric(20)
+
+# Run the models 20 times for the model with 'dis'
+for (i in 1:20) {
+  index_data <- createFolds(1:nrow(X_with_dis), 2)
+  train_indices <- index_data[[1]]
+  test_indices <- index_data[[2]]
+  
+  train_data_with_dis <- X_with_dis[train_indices, ]
+  test_data_with_dis <- X_with_dis[test_indices, ]
+  
+  fitrsf_with_dis <- rfsrc(Surv(time_to_recur_any, recur_any) ~ ., data = train_data_with_dis, nsplit = 3, ntree = 500)
+  mat_rsf_with_dis <- predict(fitrsf_with_dis, test_data_with_dis)$survival
+  
+  dis_time <- fitrsf_with_dis$time.interest
+  fitcox_with_dis <- coxph(Surv(time_to_recur_any, recur_any) ~ ., data = train_data_with_dis, x = TRUE)
+  mat_cox_with_dis <- predictSurvProb(fitcox_with_dis, test_data_with_dis, dis_time)
+  
+  med_index <- median(1:length(dis_time))
+  surv_obj <- Surv(test_data_with_dis$time_to_recur_any, test_data_with_dis$recur_any)
+  
+  # C index for Cox
+  metrics_cox_with_dis[i] <- Cindex(surv_obj, predicted = mat_cox_with_dis[, med_index])
+  # C index for RSF
+  metrics_rsf_with_dis[i] <- Cindex(surv_obj, predicted = mat_rsf_with_dis[, med_index])
+}
+
+data_CI_with_dis <- data.frame('Cindex' = c(metrics_cox_with_dis, metrics_rsf_with_dis),
+                               'model' = c(rep('Cox with Dis', 20), rep('RSF with Dis', 20)))
+
+# Plotting model with 'dis' C-index
+plot_with_dis <- ggplot(data_CI_with_dis, aes(x = model, y = Cindex, fill = model)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("#FFC300", "#DAF7A6")) +
+  labs(title = "C-index Comparison for Cox and RSF Models with Actor Ceases",
+       x = "Model",
+       y = "C-index")
+
+print(plot_with_dis)
+
+
+
+
+
+
+### Plot them all 
+
+
+library(SurvMetrics)
+library(caret)
+library(randomForestSRC)
+library(survival)  
+library(pec)
+library(ggplot2)
+library(expss)
+library(patchwork)
+
+
+
+
+
+# Applying labels and adding additional variables
+episodes_a <- apply_labels(episodes, 
+                           time_to_recur_any = "Time to Recur Any", 
+                           recur_any = "War Recurrence Any",  
+                           peace = "Peace Agreement",
+                           cease = "Ceasefire", 
+                           govvic = "Government Victory", 
+                           rebvic = "Rebel Victory", 
+                           lowac = "Low Activity", 
+                           dis = "Actor Ceases",
+                           pko_u = "Peacekeeping Operations", 
+                           log_dur = "Log Duration", 
+                           cold_war = "Cold War", 
+                           p_polity2 = "Polity Score", 
+                           fe_etfra = "Ethnic Fractionalization", 
+                           log_gdp = "Log GDP per Capita",
+                           log_pop = "Log Population",
+                           al_language2000 = "Language Fractionalization",
+                           ps_original = "Power-Sharing",
+                           al_religion2000 = "Religion Fractionalization",
+                           fe_cultdiv = "Cultural Diversity",
+                           veto_u = "Veto Players",
+                           W4 = "Coalition Size")
+
+# Combine the C-index data from all models into one data frame
+data_CI <- data.frame(
+    'Cindex' = c(metrics_cox_base, metrics_rsf_base, metrics_cox_with_peace, metrics_rsf_with_peace,
+                 metrics_cox_with_cease, metrics_rsf_with_cease, metrics_cox_with_govvic, metrics_rsf_with_govvic,
+                 metrics_cox_with_rebvic, metrics_rsf_with_rebvic, metrics_cox_with_lowac, metrics_rsf_with_lowac,
+                 metrics_cox_with_dis, metrics_rsf_with_dis),
+    'model' = c(rep('Cox Base', 20), rep('RSF Base', 20),
+                rep('Cox with Peace', 20), rep('RSF with Peace', 20),
+                rep('Cox with Ceasefire', 20), rep('RSF with Ceasefire', 20),
+                rep('Cox with Gov Victory', 20), rep('RSF with Gov Victory', 20),
+                rep('Cox with Rebel Victory', 20), rep('RSF with Rebel Victory', 20),
+                rep('Cox with Low Activity', 20), rep('RSF with Low Activity', 20),
+                rep('Cox with Actor Ceases', 20), rep('RSF with Actor Ceases', 20))
+)
+
+# Plotting using ggplot2 with 14 different colors
+ggplot(data_CI, aes(x = model, y = Cindex, fill = model)) +
+    geom_boxplot() +
+    scale_fill_manual(values = c("#FFBBCC", "#88CCFF", "#FFC300", "#DAF7A6", 
+                                 "#FF9999", "#66B2FF", "#FFD700", "#7CFC00", 
+                                 "#FF69B4", "#1E90FF", "#ADFF2F", "#32CD32", 
+                                 "#FF6347", "#4682B4")) +
+    labs(title = "C-index Comparison for Cox and RSF Models",
+         x = "Model",
+         y = "C-index") +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1),
+          legend.position = "bottom")
+```
+
+```{r}
+library(SurvMetrics)
+library(caret)
+library(randomForestSRC)
+library(survival)
+library(pec)
+library(ggplot2)
+library(expss)
+library(patchwork)
+
+# Applying labels and adding additional variables
+episodes_a <- apply_labels(episodes, 
+                           time_to_recur_any = "Time to Recur Any", 
+                           recur_any = "War Recurrence Any",  
+                           peace = "Peace Agreement",
+                           cease = "Ceasefire", 
+                           govvic = "Government Victory", 
+                           rebvic = "Rebel Victory", 
+                           lowac = "Low Activity", 
+                           dis = "Actor Ceases",
+                           pko_u = "Peacekeeping Operations", 
+                           log_dur = "Log Duration", 
+                           cold_war = "Cold War", 
+                           p_polity2 = "Polity Score", 
+                           fe_etfra = "Ethnic Fractionalization", 
+                           log_gdp = "Log GDP per Capita",
+                           log_pop = "Log Population",
+                           al_language2000 = "Language Fractionalization",
+                           ps_original = "Power-Sharing",
+                           al_religion2000 = "Religion Fractionalization",
+                           fe_cultdiv = "Cultural Diversity",
+                           veto_u = "Veto Players",
+                           W4 = "Coalition Size")
+
+# Base variables
+base_vars <- c("log_gdp", "log_pop")
+
+# Variables to be added one at a time
+additional_vars <- c("recur_any", "peace", "cease", "govvic", "rebvic", "lowac", "dis", "pko_u", 
+                     "log_dur", "cold_war", "p_polity2", "fe_etfra", "al_language2000", "ps_original", 
+                     "al_religion2000", "fe_cultdiv", "veto_u", "W4")
+
+# Function to run models and calculate C-index
+run_models <- function(data, train_indices, test_indices) {
+  train_data <- data[train_indices, ]
+  test_data <- data[test_indices, ]
+  
+  fitrsf <- rfsrc(Surv(time_to_recur_any, recur_any) ~ ., data = train_data, nsplit = 3, ntree = 500)
+  mat_rsf <- predict(fitrsf, test_data)$survival
+  
+  dis_time <- fitrsf$time.interest
+  fitcox <- coxph(Surv(time_to_recur_any, recur_any) ~ ., data = train_data, x = TRUE)
+  mat_cox <- predictSurvProb(fitcox, test_data, dis_time)
+  
+  med_index <- median(1:length(dis_time))
+  surv_obj <- Surv(test_data$time_to_recur_any, test_data$recur_any)
+  
+  cindex_cox <- Cindex(surv_obj, predicted = mat_cox[, med_index])
+  cindex_rsf <- Cindex(surv_obj, predicted = mat_rsf[, med_index])
+  
+  return(c(cindex_cox, cindex_rsf))
+}
+
+# Initialize results data frame
+results <- data.frame(Model = character(), Cindex = numeric(), Type = character(), stringsAsFactors = FALSE)
+
+# Loop over additional variables
+for (var in additional_vars) {
+  # Subset data
+  X <- subset(episodes_a, select = c(time_to_recur_any, recur_any, base_vars, var))
+  X <- na.omit(X)
+  X <- X %>% mutate(across(everything(), as.numeric))
+  
+  # Initialize C-index vectors
+  cindex_cox <- numeric(20)
+  cindex_rsf <- numeric(20)
+  
+  # Run the models 20 times
+  for (i in 1:20) {
+    index_data <- createFolds(1:nrow(X), 2)
+    train_indices <- index_data[[1]]
+    test_indices <- index_data[[2]]
+    
+    cindices <- run_models(X, train_indices, test_indices)
+    cindex_cox[i] <- cindices[1]
+    cindex_rsf[i] <- cindices[2]
+  }
+  
+  # Store results
+  results <- rbind(results, data.frame(Model = paste("Cox Base +", var), Cindex = cindex_cox, Type = "Cox"))
+  results <- rbind(results, data.frame(Model = paste("RSF Base +", var), Cindex = cindex_rsf, Type = "RSF"))
+}
+
+# Plotting C-index comparison
+plot <- ggplot(results, aes(x = Model, y = Cindex, fill = Type)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("#FFBBCC", "#88CCFF")) +
+  labs(title = "C-index Comparison for Cox and RSF Models with Different Variables",
+       x = "Model",
+       y = "C-index") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        legend.position = "bottom")
+
+print(plot)
+
+```
+
+## Any
+```{r}
+set.seed(12345)
+
+# Applying labels and adding additional variables
+eps <- apply_labels(eps, 
+                    time_to_recur_any = "Time to Recur Any", 
+                    recur_any = "War Recurrence Any",  
+                    peace = "Peace Agreement",
+                    cease = "Ceasefire", 
+                    govvic = "Government Victory", 
+                    rebvic = "Rebel Victory", 
+                    lowac = "Low Activity", 
+                    dis = "Actor Ceases",
+                    pko_u = "Peacekeeping Operations", 
+                    log_dur = "Log Duration", 
+                    cold_war = "Cold War", 
+                    p_polity2 = "Polity Score", 
+                    fe_etfra = "Ethnic Fractionalization", 
+                    log_gdp = "Log GDP per Capita",
+                    log_pop = "Log Population",
+                    al_language2000 = "Language Fractionalization",
+                    ps_original = "Power-Sharing",
+                    al_religion2000 = "Religion Fractionalization",
+                    fe_cultdiv = "Cultural Diversity",
+                    veto_u = "Veto Players",
+                    W4 = "Coalition Size")
+
+# Base variables
+base_vars <- c("log_gdp", "log_pop")
+
+# Variables to be added one at a time with their labels
+additional_vars <- list(
+  "peace" = "Peace Agreement",
+  "cease" = "Ceasefire",
+  "govvic" = "Government Victory",
+  "rebvic" = "Rebel Victory",
+  "lowac" = "Low Activity",
+  "dis" = "Actor Ceases",
+  "pko_u" = "Peacekeeping Operations",
+  "log_dur" = "Log Duration",
+  "cold_war" = "Cold War",
+  "p_polity2" = "Polity Score",
+  "fe_etfra" = "Ethnic Fractionalization",
+  "al_language2000" = "Language Fractionalization",
+  "ps_original" = "Power-Sharing",
+  "al_religion2000" = "Religion Fractionalization",
+  "fe_cultdiv" = "Cultural Diversity",
+  "veto_u" = "Veto Players",
+  "W4" = "Coalition Size"
+)
+
+# Function to run models and calculate C-index
+run_models <- function(data, train_indices, test_indices) {
+  train_data <- data[train_indices, ]
+  test_data <- data[test_indices, ]
+  
+  fitrsf <- rfsrc(Surv(time_to_recur_any, recur_any) ~ ., data = train_data, nsplit = 3, ntree = 500)
+  mat_rsf <- predict(fitrsf, test_data)$survival
+  
+  dis_time <- fitrsf$time.interest
+  fitcox <- coxph(Surv(time_to_recur_any, recur_any) ~ ., data = train_data, x = TRUE)
+  mat_cox <- predictSurvProb(fitcox, test_data, dis_time)
+  
+  med_index <- median(1:length(dis_time))
+  surv_obj <- Surv(test_data$time_to_recur_any, test_data$recur_any)
+  
+  cindex_cox <- Cindex(surv_obj, predicted = mat_cox[, med_index])
+  cindex_rsf <- Cindex(surv_obj, predicted = mat_rsf[, med_index])
+  
+  return(c(cindex_cox, cindex_rsf))
+}
+
+# Initialize results data frame
+results <- data.frame(Model = character(), Cindex = numeric(), Type = character(), stringsAsFactors = FALSE)
+
+# Run the base model without additional variables
+X_base <- subset(eps, select = c("time_to_recur_any", "recur_any", base_vars))
+X_base <- X_base %>% mutate(across(everything(), as.numeric))
+
+cindex_cox_base <- numeric(20)
+cindex_rsf_base <- numeric(20)
+
+for (i in 1:20) {
+  index_data <- createFolds(1:nrow(X_base), 2)
+  train_indices <- index_data[[1]]
+  test_indices <- index_data[[2]]
+  
+  cindices <- run_models(X_base, train_indices, test_indices)
+  cindex_cox_base[i] <- cindices[1]
+  cindex_rsf_base[i] <- cindices[2]
+}
+
+results <- rbind(results, data.frame(Model = "Cox Base", Cindex = cindex_cox_base, Type = "Cox"))
+results <- rbind(results, data.frame(Model = "RSF Base", Cindex = cindex_rsf_base, Type = "RSF"))
+
+# Loop over additional variables
+for (var in names(additional_vars)) {
+  # Subset data
+  X <- subset(eps, select = c("time_to_recur_any", "recur_any", base_vars, var))
+  X <- X %>% mutate(across(everything(), as.numeric))
+  
+  # Initialize C-index vectors
+  cindex_cox <- numeric(20)
+  cindex_rsf <- numeric(20)
+  
+  # Run the models 20 times
+  for (i in 1:20) {
+    index_data <- createFolds(1:nrow(X), 2)
+    train_indices <- index_data[[1]]
+    test_indices <- index_data[[2]]
+    
+    cindices <- run_models(X, train_indices, test_indices)
+    cindex_cox[i] <- cindices[1]
+    cindex_rsf[i] <- cindices[2]
+  }
+  
+  # Store results
+  results <- rbind(results, data.frame(Model = paste("Cox Base +", additional_vars[[var]]), Cindex = cindex_cox, Type = "Cox"))
+  results <- rbind(results, data.frame(Model = paste("RSF Base +", additional_vars[[var]]), Cindex = cindex_rsf, Type = "RSF"))
+}
+
+# Plotting C-index comparison
+plot <- ggplot(results, aes(y = Model, x = Cindex, fill = Type)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("#FFBBCC", "#88CCFF")) +
+  labs(title = "C-index Comparison for Cox and RSF Models with Different Variables",
+       y = "Model",
+       x = "C-index") +
+  theme(axis.text.y = element_text(angle = 0, hjust = 1),
+        legend.position = "bottom")
+
+print(plot)
+```
+```{r}
+set.seed(12345)
+
+# Applying labels and adding additional variables
+eps <- apply_labels(eps, 
+                    time_to_recur_any = "Time to Recur Any", 
+                    recur_any = "War Recurrence Any",  
+                    peace = "Peace Agreement",
+                    cease = "Ceasefire", 
+                    govvic = "Government Victory", 
+                    rebvic = "Rebel Victory", 
+                    lowac = "Low Activity", 
+                    dis = "Actor Ceases",
+                    pko_u = "Peacekeeping Operations", 
+                    log_dur = "Log Duration", 
+                    cold_war = "Cold War", 
+                    p_polity2 = "Polity Score", 
+                    fe_etfra = "Ethnic Fractionalization", 
+                    log_gdp = "Log GDP per Capita",
+                    log_pop = "Log Population",
+                    al_language2000 = "Language Fractionalization",
+                    ps_original = "Power-Sharing",
+                    al_religion2000 = "Religion Fractionalization",
+                    fe_cultdiv = "Cultural Diversity",
+                    veto_u = "Veto Players",
+                    W4 = "Coalition Size")
+
+# Base variables: Include everything except the six outcome variables and ter_war
+outcome_vars <- c("peace", "cease", "govvic", "rebvic", "lowac", "dis")
+base_vars <- setdiff(names(eps), c("time_to_recur_any", "recur_any", "ter_war", outcome_vars))
+
+# Function to run models and calculate C-index
+run_models <- function(data, train_indices, test_indices) {
+  train_data <- data[train_indices, ]
+  test_data <- data[test_indices, ]
+  
+  fitrsf <- rfsrc(Surv(time_to_recur_any, recur_any) ~ ., data = train_data, nsplit = 3, ntree = 500)
+  mat_rsf <- predict(fitrsf, test_data)$survival
+  
+  dis_time <- fitrsf$time.interest
+  fitcox <- coxph(Surv(time_to_recur_any, recur_any) ~ ., data = train_data, x = TRUE)
+  mat_cox <- predictSurvProb(fitcox, test_data, dis_time)
+  
+  med_index <- median(1:length(dis_time))
+  surv_obj <- Surv(test_data$time_to_recur_any, test_data$recur_any)
+  
+  cindex_cox <- Cindex(surv_obj, predicted = mat_cox[, med_index])
+  cindex_rsf <- Cindex(surv_obj, predicted = mat_rsf[, med_index])
+  
+  return(c(cindex_cox, cindex_rsf))
+}
+
+# Initialize results data frame
+results <- data.frame(Model = character(), Cindex = numeric(), Type = character(), stringsAsFactors = FALSE)
+
+# Run the base model without additional variables
+X_base <- subset(eps, select = c("time_to_recur_any", "recur_any", base_vars))
+X_base <- X_base %>% mutate(across(everything(), as.numeric))
+
+cindex_cox_base <- numeric(20)
+cindex_rsf_base <- numeric(20)
+
+for (i in 1:20) {
+  index_data <- createFolds(1:nrow(X_base), 2)
+  train_indices <- index_data[[1]]
+  test_indices <- index_data[[2]]
+  
+  cindices <- run_models(X_base, train_indices, test_indices)
+  cindex_cox_base[i] <- cindices[1]
+  cindex_rsf_base[i] <- cindices[2]
+}
+
+results <- rbind(results, data.frame(Model = "Cox Base", Cindex = cindex_cox_base, Type = "Cox"))
+results <- rbind(results, data.frame(Model = "RSF Base", Cindex = cindex_rsf_base, Type = "RSF"))
+
+# Loop over each of the six outcome variables
+for (var in outcome_vars) {
+  # Subset data
+  X <- subset(eps, select = c("time_to_recur_any", "recur_any", base_vars, var))
+  X <- X %>% mutate(across(everything(), as.numeric))
+  
+  # Initialize C-index vectors
+  cindex_cox <- numeric(20)
+  cindex_rsf <- numeric(20)
+  
+  # Run the models 20 times
+  for (i in 1:20) {
+    index_data <- createFolds(1:nrow(X), 2)
+    train_indices <- index_data[[1]]
+    test_indices <- index_data[[2]]
+    
+    cindices <- run_models(X, train_indices, test_indices)
+    cindex_cox[i] <- cindices[1]
+    cindex_rsf[i] <- cindices[2]
+  }
+  
+  # Store results
+  results <- rbind(results, data.frame(Model = paste("Cox Base +", var), Cindex = cindex_cox, Type = "Cox"))
+  results <- rbind(results, data.frame(Model = paste("RSF Base +", var), Cindex = cindex_rsf, Type = "RSF"))
+}
+
+# Plotting C-index comparison
+plot <- ggplot(results, aes(y = Model, x = Cindex, fill = Type)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("#FFBBCC", "#88CCFF")) +
+  labs(title = "C-index Comparison for Cox and RSF Models with Different Variables",
+       y = "Model",
+       x = "C-index") +
+  theme(axis.text.y = element_text(angle = 0, hjust = 1),
+        legend.position = "bottom")
+
+print(plot)
+```
+
+
+## Side
+
+```{r}
+# Set a random seed for reproducibility
+set.seed(12345)
+
+# Applying labels and adding additional variables
+eps <- apply_labels(eps, 
+                    time_to_recur = "Time to Recur Side", 
+                    recur_side = "War Recurrence Side", 
+                    peace = "Peace Agreement",
+                    cease = "Ceasefire", 
+                    govvic = "Government Victory", 
+                    rebvic = "Rebel Victory", 
+                    lowac = "Low Activity", 
+                    dis = "Actor Ceases",
+                    pko_u = "Peacekeeping Operations", 
+                    log_dur = "Log Duration", 
+                    cold_war = "Cold War", 
+                    p_polity2 = "Polity Score", 
+                    fe_etfra = "Ethnic Fractionalization", 
+                    log_gdp = "Log GDP per Capita",
+                    log_pop = "Log Population",
+                    al_language2000 = "Language Fractionalization",
+                    ps_original = "Power-Sharing",
+                    al_religion2000 = "Religion Fractionalization",
+                    fe_cultdiv = "Cultural Diversity",
+                    veto_u = "Veto Players",
+                    W4 = "Coalition Size")
+
+# Base variables
+base_vars <- c("log_gdp", "log_pop")
+
+# Variables to be added one at a time with their labels
+additional_vars <- list(
+  "peace" = "Peace Agreement",
+  "cease" = "Ceasefire",
+  "govvic" = "Government Victory",
+  "rebvic" = "Rebel Victory",
+  "lowac" = "Low Activity",
+  "dis" = "Actor Ceases",
+  "pko_u" = "Peacekeeping Operations",
+  "log_dur" = "Log Duration",
+  "cold_war" = "Cold War",
+  "p_polity2" = "Polity Score",
+  "fe_etfra" = "Ethnic Fractionalization",
+  "al_language2000" = "Language Fractionalization",
+  "ps_original" = "Power-Sharing",
+  "al_religion2000" = "Religion Fractionalization",
+  "fe_cultdiv" = "Cultural Diversity",
+  "veto_u" = "Veto Players",
+  "W4" = "Coalition Size"
+)
+
+# Function to run models and calculate C-index
+run_models <- function(data, train_indices, test_indices) {
+  train_data <- data[train_indices, ]
+  test_data <- data[test_indices, ]
+  
+  fitrsf <- rfsrc(Surv(time_to_recur, recur_side) ~ ., data = train_data, nsplit = 3, ntree = 500)
+  mat_rsf <- predict(fitrsf, test_data)$survival
+  
+  dis_time <- fitrsf$time.interest
+  fitcox <- coxph(Surv(time_to_recur, recur_side) ~ ., data = train_data, x = TRUE)
+  mat_cox <- predictSurvProb(fitcox, test_data, dis_time)
+  
+  med_index <- median(1:length(dis_time))
+  surv_obj <- Surv(test_data$time_to_recur, test_data$recur_side)
+  
+  cindex_cox <- Cindex(surv_obj, predicted = mat_cox[, med_index])
+  cindex_rsf <- Cindex(surv_obj, predicted = mat_rsf[, med_index])
+  
+  return(c(cindex_cox, cindex_rsf))
+}
+
+# Initialize results data frame
+results <- data.frame(Model = character(), Cindex = numeric(), Type = character(), stringsAsFactors = FALSE)
+
+# Run the base model without additional variables
+X_base <- subset(eps, select = c("time_to_recur", "recur_side", base_vars))
+X_base <- X_base %>% mutate(across(everything(), as.numeric))
+
+cindex_cox_base <- numeric(20)
+cindex_rsf_base <- numeric(20)
+
+for (i in 1:20) {
+  index_data <- createFolds(1:nrow(X_base), 2)
+  train_indices <- index_data[[1]]
+  test_indices <- index_data[[2]]
+  
+  cindices <- run_models(X_base, train_indices, test_indices)
+  cindex_cox_base[i] <- cindices[1]
+  cindex_rsf_base[i] <- cindices[2]
+}
+
+results <- rbind(results, data.frame(Model = "Cox Base", Cindex = cindex_cox_base, Type = "Cox"))
+results <- rbind(results, data.frame(Model = "RSF Base", Cindex = cindex_rsf_base, Type = "RSF"))
+
+# Loop over additional variables
+for (var in names(additional_vars)) {
+  # Subset data
+  X <- subset(eps, select = c("time_to_recur", "recur_side", base_vars, var))
+  X <- X %>% mutate(across(everything(), as.numeric))
+  
+  # Initialize C-index vectors
+  cindex_cox <- numeric(20)
+  cindex_rsf <- numeric(20)
+  
+  # Run the models 20 times
+  for (i in 1:20) {
+    index_data <- createFolds(1:nrow(X), 2)
+    train_indices <- index_data[[1]]
+    test_indices <- index_data[[2]]
+    
+    cindices <- run_models(X, train_indices, test_indices)
+    cindex_cox[i] <- cindices[1]
+    cindex_rsf[i] <- cindices[2]
+  }
+  
+  # Store results
+  results <- rbind(results, data.frame(Model = paste("Cox Base +", additional_vars[[var]]), Cindex = cindex_cox, Type = "Cox"))
+  results <- rbind(results, data.frame(Model = paste("RSF Base +", additional_vars[[var]]), Cindex = cindex_rsf, Type = "RSF"))
+}
+
+# Plotting C-index comparison
+plot <- ggplot(results, aes(y = Model, x = Cindex, fill = Type)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("#FFBBCC", "#88CCFF")) +
+  labs(title = "C-index Comparison for Cox and RSF Models with Different Variables",
+       y = "Model",
+       x = "C-index") +
+  theme(axis.text.y = element_text(angle = 0, hjust = 1),
+        legend.position = "bottom")
+
+print(plot)
+```
+
+## Any with Imputation
+
+```{r}
+library(SurvMetrics)
+library(caret)
+library(randomForestSRC)
+library(survival)
+library(pec)
+library(ggplot2)
+library(expss)
+library(patchwork)
+library(dplyr)
+library(mice)
+
+# Set a random seed for reproducibility
+set.seed(12345)
+
+# Applying labels and adding additional variables
+eps <- apply_labels(eps, 
+                    time_to_recur_any = "Time to Recur Any", 
+                    recur_any = "War Recurrence Any",  
+                    peace = "Peace Agreement",
+                    cease = "Ceasefire", 
+                    govvic = "Government Victory", 
+                    rebvic = "Rebel Victory", 
+                    lowac = "Low Activity", 
+                    dis = "Actor Ceases",
+                    pko_u = "Peacekeeping Operations", 
+                    log_dur = "Log Duration", 
+                    cold_war = "Cold War", 
+                    p_polity2 = "Polity Score", 
+                    fe_etfra = "Ethnic Fractionalization", 
+                    log_gdp = "Log GDP per Capita",
+                    log_pop = "Log Population",
+                    al_language2000 = "Language Fractionalization",
+                    ps_original = "Power-Sharing",
+                    al_religion2000 = "Religion Fractionalization",
+                    fe_cultdiv = "Cultural Diversity",
+                    veto_u = "Veto Players",
+                    W4 = "Coalition Size")
+
+# Base variables
+base_vars <- c("log_gdp", "log_pop")
+
+# Variables to be added one at a time with their labels
+additional_vars <- list(
+  "peace" = "Peace Agreement",
+  "cease" = "Ceasefire",
+  "govvic" = "Government Victory",
+  "rebvic" = "Rebel Victory",
+  "lowac" = "Low Activity",
+  "dis" = "Actor Ceases",
+  "pko_u" = "Peacekeeping Operations",
+  "log_dur" = "Log Duration",
+  "cold_war" = "Cold War",
+  "p_polity2" = "Polity Score",
+  "fe_etfra" = "Ethnic Fractionalization",
+  "al_language2000" = "Language Fractionalization",
+  "ps_original" = "Power-Sharing",
+  "al_religion2000" = "Religion Fractionalization",
+  "fe_cultdiv" = "Cultural Diversity",
+  "veto_u" = "Veto Players",
+  "W4" = "Coalition Size"
+)
+
+# Function to run models and calculate C-index
+run_models <- function(data, train_indices, test_indices) {
+  train_data <- data[train_indices, ]
+  test_data <- data[test_indices, ]
+  
+  fitrsf <- rfsrc(Surv(time_to_recur_any, recur_any) ~ ., data = train_data, nsplit = 3, ntree = 500)
+  mat_rsf <- predict(fitrsf, test_data)$survival
+  
+  dis_time <- fitrsf$time.interest
+  fitcox <- coxph(Surv(time_to_recur_any, recur_any) ~ ., data = train_data, x = TRUE)
+  mat_cox <- predictSurvProb(fitcox, test_data, dis_time)
+  
+  med_index <- median(1:length(dis_time))
+  surv_obj <- Surv(test_data$time_to_recur_any, test_data$recur_any)
+  
+  cindex_cox <- Cindex(surv_obj, predicted = mat_cox[, med_index])
+  cindex_rsf <- Cindex(surv_obj, predicted = mat_rsf[, med_index])
+  
+  return(c(cindex_cox, cindex_rsf))
+}
+
+# Initialize results data frame
+results <- data.frame(Model = character(), Cindex = numeric(), Type = character(), stringsAsFactors = FALSE)
+
+# Impute missing values
+imputed_data <- mice(eps, m = 1, maxit = 50, method = 'pmm', seed = 12345)
+eps_imputed <- complete(imputed_data, 1)
+
+# Run the base model without additional variables
+X_base <- subset(eps_imputed, select = c("time_to_recur_any", "recur_any", base_vars))
+X_base <- X_base %>% mutate(across(everything(), as.numeric))
+
+cindex_cox_base <- numeric(20)
+cindex_rsf_base <- numeric(20)
+
+for (i in 1:20) {
+  index_data <- createFolds(1:nrow(X_base), 2)
+  train_indices <- index_data[[1]]
+  test_indices <- index_data[[2]]
+  
+  cindices <- run_models(X_base, train_indices, test_indices)
+  cindex_cox_base[i] <- cindices[1]
+  cindex_rsf_base[i] <- cindices[2]
+}
+
+results <- rbind(results, data.frame(Model = "Cox Base", Cindex = cindex_cox_base, Type = "Cox"))
+results <- rbind(results, data.frame(Model = "RSF Base", Cindex = cindex_rsf_base, Type = "RSF"))
+
+# Loop over additional variables
+for (var in names(additional_vars)) {
+  # Subset data
+  X <- subset(eps_imputed, select = c("time_to_recur_any", "recur_any", base_vars, var))
+  X <- X %>% mutate(across(everything(), as.numeric))
+  
+  # Initialize C-index vectors
+  cindex_cox <- numeric(20)
+  cindex_rsf <- numeric(20)
+  
+  # Run the models 20 times
+  for (i in 1:20) {
+    index_data <- createFolds(1:nrow(X), 2)
+    train_indices <- index_data[[1]]
+    test_indices <- index_data[[2]]
+    
+    cindices <- run_models(X, train_indices, test_indices)
+    cindex_cox[i] <- cindices[1]
+    cindex_rsf[i] <- cindices[2]
+  }
+  
+  # Store results
+  results <- rbind(results, data.frame(Model = paste("Cox Base +", additional_vars[[var]]), Cindex = cindex_cox, Type = "Cox"))
+  results <- rbind(results, data.frame(Model = paste("RSF Base +", additional_vars[[var]]), Cindex = cindex_rsf, Type = "RSF"))
+}
+
+# Plotting C-index comparison
+plot <- ggplot(results, aes(y = Model, x = Cindex, fill = Type)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("#FFBBCC", "#88CCFF")) +
+  labs(title = "C-index Comparison for Cox and RSF Models with Different Variables",
+       y = "Model",
+       x = "C-index") +
+  theme(axis.text.y = element_text(angle = 0, hjust = 1),
+        legend.position = "bottom")
+
+print(plot)
+```
+
+## Any 5 imputation
+
+```{r}
+library(SurvMetrics)
+library(caret)
+library(randomForestSRC)
+library(survival)
+library(pec)
+library(ggplot2)
+library(expss)
+library(patchwork)
+library(dplyr)
+library(mice)
+
+# Set a random seed for reproducibility
+set.seed(12345)
+
+# Applying labels and adding additional variables
+eps <- apply_labels(eps, 
+                    time_to_recur_any = "Time to Recur Any", 
+                    recur_any = "War Recurrence Any",  
+                    peace = "Peace Agreement",
+                    cease = "Ceasefire", 
+                    govvic = "Government Victory", 
+                    rebvic = "Rebel Victory", 
+                    lowac = "Low Activity", 
+                    dis = "Actor Ceases",
+                    pko_u = "Peacekeeping Operations", 
+                    log_dur = "Log Duration", 
+                    cold_war = "Cold War", 
+                    p_polity2 = "Polity Score", 
+                    fe_etfra = "Ethnic Fractionalization", 
+                    log_gdp = "Log GDP per Capita",
+                    log_pop = "Log Population",
+                    al_language2000 = "Language Fractionalization",
+                    ps_original = "Power-Sharing",
+                    al_religion2000 = "Religion Fractionalization",
+                    fe_cultdiv = "Cultural Diversity",
+                    veto_u = "Veto Players",
+                    W4 = "Coalition Size")
+
+# Base variables
+base_vars <- c("log_gdp", "log_pop")
+
+# Variables to be added one at a time with their labels
+additional_vars <- list(
+  "peace" = "Peace Agreement",
+  "cease" = "Ceasefire",
+  "govvic" = "Government Victory",
+  "rebvic" = "Rebel Victory",
+  "lowac" = "Low Activity",
+  "dis" = "Actor Ceases",
+  "pko_u" = "Peacekeeping Operations",
+  "log_dur" = "Log Duration",
+  "cold_war" = "Cold War",
+  "p_polity2" = "Polity Score",
+  "fe_etfra" = "Ethnic Fractionalization",
+  "al_language2000" = "Language Fractionalization",
+  "ps_original" = "Power-Sharing",
+  "al_religion2000" = "Religion Fractionalization",
+  "fe_cultdiv" = "Cultural Diversity",
+  "veto_u" = "Veto Players",
+  "W4" = "Coalition Size"
+)
+
+# Function to run models and calculate C-index
+run_models <- function(data, train_indices, test_indices) {
+  train_data <- data[train_indices, ]
+  test_data <- data[test_indices, ]
+  
+  fitrsf <- rfsrc(Surv(time_to_recur_any, recur_any) ~ ., data = train_data, nsplit = 3, ntree = 500)
+  mat_rsf <- predict(fitrsf, test_data)$survival
+  
+  dis_time <- fitrsf$time.interest
+  fitcox <- coxph(Surv(time_to_recur_any, recur_any) ~ ., data = train_data, x = TRUE)
+  mat_cox <- predictSurvProb(fitcox, test_data, dis_time)
+  
+  med_index <- median(1:length(dis_time))
+  surv_obj <- Surv(test_data$time_to_recur_any, test_data$recur_any)
+  
+  cindex_cox <- Cindex(surv_obj, predicted = mat_cox[, med_index])
+  cindex_rsf <- Cindex(surv_obj, predicted = mat_rsf[, med_index])
+  
+  return(c(cindex_cox, cindex_rsf))
+}
+
+# Initialize results data frame
+results <- data.frame(Model = character(), Cindex = numeric(), Type = character(), stringsAsFactors = FALSE)
+
+# Perform multiple imputations
+imputed_data <- mice(eps, m = 5, maxit = 50, method = 'pmm', seed = 12345)
+
+# Iterate over each imputed dataset
+for (i in 1:5) {
+  eps_imputed <- complete(imputed_data, i)
+  
+  # Run the base model without additional variables
+  X_base <- subset(eps_imputed, select = c("time_to_recur_any", "recur_any", base_vars))
+  X_base <- X_base %>% mutate(across(everything(), as.numeric))
+  
+  cindex_cox_base <- numeric(20)
+  cindex_rsf_base <- numeric(20)
+  
+  for (j in 1:20) {
+    index_data <- createFolds(1:nrow(X_base), 2)
+    train_indices <- index_data[[1]]
+    test_indices <- index_data[[2]]
+    
+    cindices <- run_models(X_base, train_indices, test_indices)
+    cindex_cox_base[j] <- cindices[1]
+    cindex_rsf_base[j] <- cindices[2]
+  }
+  
+  results <- rbind(results, data.frame(Model = "Cox Base", Cindex = cindex_cox_base, Type = "Cox"))
+  results <- rbind(results, data.frame(Model = "RSF Base", Cindex = cindex_rsf_base, Type = "RSF"))
+  
+  # Loop over additional variables
+  for (var in names(additional_vars)) {
+    # Subset data
+    X <- subset(eps_imputed, select = c("time_to_recur_any", "recur_any", base_vars, var))
+    X <- X %>% mutate(across(everything(), as.numeric))
+    
+    # Initialize C-index vectors
+    cindex_cox <- numeric(20)
+    cindex_rsf <- numeric(20)
+    
+    # Run the models 20 times
+    for (j in 1:20) {
+      index_data <- createFolds(1:nrow(X), 2)
+      train_indices <- index_data[[1]]
+      test_indices <- index_data[[2]]
+      
+      cindices <- run_models(X, train_indices, test_indices)
+      cindex_cox[j] <- cindices[1]
+      cindex_rsf[j] <- cindices[2]
+    }
+    
+    # Store results
+    results <- rbind(results, data.frame(Model = paste("Cox Base +", additional_vars[[var]]), Cindex = cindex_cox, Type = "Cox"))
+    results <- rbind(results, data.frame(Model = paste("RSF Base +", additional_vars[[var]]), Cindex = cindex_rsf, Type = "RSF"))
+  }
+}
+
+# Plotting C-index comparison
+plot <- ggplot(results, aes(y = Model, x = Cindex, fill = Type)) +
+  geom_boxplot() +
+  scale_fill_manual(values = c("#FFBBCC", "#88CCFF")) +
+  labs(title = "C-index Comparison for Cox and RSF Models with Different Variables",
+       y = "Model",
+       x = "C-index") +
+  theme(axis.text.y = element_text(angle = 0, hjust = 1),
+        legend.position = "bottom")
+
+print(plot)
+```
