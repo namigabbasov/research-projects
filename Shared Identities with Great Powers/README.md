@@ -1,7 +1,7 @@
-# Understanding Foreign Policy Preferences in Small States: The Role of Shared Identity
+# Identity Matters: Role of Shared Identities in Foreign Policy Dispositions within Small States towards Great Powers
 
-![Probability Graph Banner](image.png)
 ![Theoretical Model Banner](image1.png)
+![Probability Graph Banner](image.png)
 
 ## Summary
 
