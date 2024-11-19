@@ -38,8 +38,3 @@ Using machine learning models, the study demonstrates that identity-based explan
 - **Policy**: Understanding shared identity dynamics can help great powers develop more effective foreign policy strategies towards small states.
 - **Security**: Identity-driven preferences have significant implications for international and regional security in the context of great power competition.
 - **Future Research**: The findings encourage further exploration of identity-based mechanisms in other geopolitical contexts.
-
----
-
-This project was supported by [Your Institution/Collaborators/Funders].
-
