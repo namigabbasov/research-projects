@@ -2,6 +2,7 @@
 
 ![Theoretical Model Banner](image1.png)
 ![Probability Graph Banner](image.png)
+![Probability Graph Banner](image2.png)
 
 ## Summary
 
