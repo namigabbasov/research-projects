@@ -1,0 +1,1412 @@
+---
+title: "Preference for Great Powers"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Libraries 
+```{r}
+#install.packages('rlang')
+#install.packages("caret", dependencies = c("Depends", "Suggests"))
+library(Amelia)
+library(dplyr)
+library(modeest)
+library(ggplot2)
+library(cowplot)
+library(mice)
+library(caTools)
+library(caret)
+library(tidyverse) 
+library(dplyr)
+library(scales)
+library(MASS)
+library(stargazer)
+```
+
+## Explanatory Data Analysis 
+
+### Correlation matrix
+```{r}
+#EU2011_vars<- c("critgov", "restrad","pater","threatr", "relser", "rus", "eng", "gov_trust", "eth", "ecrung", "sex", "age", "educ", "iden", "id")
+#EU2011_v <- EU2011[EU2011_vars]
+#cor(EU2011_v, method = c("pearson"), use = "pairwise.complete.obs")
+
+#EU2013_vars<- c("critgov", "restrad","pater", "Russian", "English", "threatr",  "relser", "rus", "eng", "gov_trust", "eth", "ecrung", "sex", "age", "educ","income", "iden", "id")
+#EU2013_v <- EU2013[EU2013_vars]
+#cor(EU2013_v, method = c("pearson"), use = "pairwise.complete.obs")
+
+#EU2015_vars<- c("critgov", "restrad", "pater", "Russian", "English", "threatr","relser", "rus", "eng", "gov_trust", "eth", "ecrung", "sex", "age", "educ","income", "iden", "id")
+#EU2015_v <- EU2015[EU2015_vars]
+#cor(EU2015_v, method = c("pearson"), use = "pairwise.complete.obs")
+
+EU2017_vars<- c("critgov", "restrad", "pater", "Russian", "English", "threatr","relser", "rus", "eng", "gov_trust", "eth", "ecrung", "sex", "age", "educ", "income",  "iden", "id")
+EU2017_v <- EU2021[EU2017_vars]
+cor(EU2017_v, method = c("pearson"), use = "pairwise.complete.obs")
+
+EU2019_vars<- c("critgov", "restrad", "pater", "Russian", "English", "threatr","relser", "rus", "eng", "gov_trust", "eth", "ecrung", "sex", "age", "educ","income", "iden", "id")
+EU2019_v <- EU2019[EU2019_vars]
+cor(EU2019_v, method = c("pearson"), use = "pairwise.complete.obs")
+
+EU2021_vars<- c("critgov", "restrad", "pater", "Russian", "English", "threatr","relser", "rus", "eng", "gov_trust", "eth", "ecrung", "sex", "age", "educ","income", "iden", "id")
+EU2021_v <- EU2021[EU2021_vars]
+cor(EU2021_v, method = c("pearson"), use = "pairwise.complete.obs")
+```
+
+### Distribution of DVs
+```{r}
+PUS<- table(EU2021$GEPOLUS)
+PUS_p<-prop.table(PUS)
+PUS_df<-as.data.frame(PUS_p)
+names(PUS_df) <- c("GEPOLUS", "Frequency")
+PUS_df$GEPOLUS<-recode_factor(PUS_df$GEPOLUS, '1' = "Yes", '0'= "No")
+ggplot(data=PUS_df, mapping=aes(x=GEPOLUS, y=Frequency)) + 
+  geom_col()+
+  scale_y_continuous(label=percent)+
+  geom_col(fill="red", alpha=0.5)+
+  labs(title="Support for EU Membership",
+    subtitle="Percentage of individuals supporting EU Membership",
+    caption="Source: The Caucasus Barometer Regional 2019",
+    x="Support for EU Membership", y="")+
+  theme_bw() + 
+  theme(title=element_text(size=14), axis.text=element_text(size=12)) +
+  theme(panel.grid.major.x = element_blank())+
+  geom_text(mapping=aes(x=GEPOLUS, y=Frequency,
+                        label=percent(Frequency)), size=5, nudge_y=0.03)
+
+
+EUS<- table(EU2021$GEECOUS)
+EUS_p<-prop.table(EUS)
+EUS_df<-as.data.frame(EUS_p)
+names(EUS_df) <- c("GEECOUS", "Frequency")
+EUS_df$GEECOUS<-recode_factor(EUS_df$GEECOUS, '1' = "Yes", '0'= "No")
+ggplot(data=EUS_df, mapping=aes(x=GEECOUS, y=Frequency)) + 
+  geom_col()+
+  scale_y_continuous(label=percent)+
+  geom_col(fill="red", alpha=0.5)+
+  labs(title="Support for EU Membership",
+    subtitle="Percentage of individuals supporting EU Membership",
+    caption="Source: The Caucasus Barometer Regional 2019",
+    x="Support for EU Membership", y="")+
+  theme_bw() + 
+  theme(title=element_text(size=14), axis.text=element_text(size=12)) +
+  theme(panel.grid.major.x = element_blank())+
+  geom_text(mapping=aes(x=GEECOUS, y=Frequency,
+                        label=percent(Frequency)), size=5, nudge_y=0.03)
+
+
+
+PRU<- table(EU2021$GEPOLRU)
+PRU_p<-prop.table(PRU)
+PRU_df<-as.data.frame(PRU_p)
+names(PRU_df) <- c("GEPOLRU", "Frequency")
+PRU_df$GEPOLRU<-recode_factor(PRU_df$GEPOLRU, '1' = "Yes", '0'= "No")
+ggplot(data=PRU_df, mapping=aes(x=GEPOLRU, y=Frequency)) + 
+  geom_col()+
+  scale_y_continuous(label=percent)+
+  geom_col(fill="red", alpha=0.5)+
+  labs(title="Support for EU Membership",
+    subtitle="Percentage of individuals supporting EU Membership",
+    caption="Source: The Caucasus Barometer Regional 2019",
+    x="Support for EU Membership", y="")+
+  theme_bw() + 
+  theme(title=element_text(size=14), axis.text=element_text(size=12)) +
+  theme(panel.grid.major.x = element_blank())+
+  geom_text(mapping=aes(x=GEPOLRU, y=Frequency,
+                        label=percent(Frequency)), size=5, nudge_y=0.03)
+
+
+ERU<- table(EU2021$GEECORU)
+ERU_p<-prop.table(ERU)
+ERU_df<-as.data.frame(ERU_p)
+names(ERU_df) <- c("GEECORU", "Frequency")
+ERU_df$GEECORU<-recode_factor(ERU_df$GEECORU, '1' = "Yes", '0'= "No")
+ggplot(data=ERU_df, mapping=aes(x=GEECORU, y=Frequency)) + 
+  geom_col()+
+  scale_y_continuous(label=percent)+
+  geom_col(fill="red", alpha=0.5)+
+  labs(title="Support for EU Membership",
+    subtitle="Percentage of individuals supporting EU Membership",
+    caption="Source: The Caucasus Barometer Regional 2019",
+    x="Support for EU Membership", y="")+
+  theme_bw() + 
+  theme(title=element_text(size=14), axis.text=element_text(size=12)) +
+  theme(panel.grid.major.x = element_blank())+
+  geom_text(mapping=aes(x=GEECORU, y=Frequency,
+                        label=percent(Frequency)), size=5, nudge_y=0.03)
+
+
+
+USA<- table(EU2021$USA)
+USA_p<-prop.table(USA)
+USA_df<-as.data.frame(USA_p)
+names(USA_df) <- c("USA", "Frequency")
+USA_df$USA<-recode_factor(USA_df$USA, '1' = "Yes", '0'= "No")
+ggplot(data=USA_df, mapping=aes(x=USA, y=Frequency)) + 
+  geom_col()+
+  scale_y_continuous(label=percent)+
+  geom_col(fill="red", alpha=0.5)+
+  labs(title="Support for EU Membership",
+    subtitle="Percentage of individuals supporting EU Membership",
+    caption="Source: The Caucasus Barometer Regional 2013",
+    x="Support for EU Membership", y="")+
+  theme_bw() + 
+  theme(title=element_text(size=14), axis.text=element_text(size=12)) +
+  theme(panel.grid.major.x = element_blank())+
+  geom_text(mapping=aes(x=USA, y=Frequency,
+                        label=percent(Frequency)), size=5, nudge_y=0.03)
+
+
+Russia<- table(EU2021$Russia)
+Russia_p<-prop.table(Russia)
+Russia_df<-as.data.frame(Russia_p)
+names(Russia_df) <- c("Russia", "Frequency")
+Russia_df$Russia<-recode_factor(Russia_df$Russia, '1' = "Yes", '0'= "No")
+ggplot(data=Russia_df, mapping=aes(x=Russia, y=Frequency)) + 
+  geom_col()+
+  scale_y_continuous(label=percent)+
+  geom_col(fill="red", alpha=0.5)+
+  labs(title="Support for EU Membership",
+    subtitle="Percentage of individuals supporting EU Membership",
+    caption="Source: The Caucasus Barometer Regional 2013",
+    x="Support for EU Membership", y="")+
+  theme_bw() + 
+  theme(title=element_text(size=14), axis.text=element_text(size=12)) +
+  theme(panel.grid.major.x = element_blank())+
+  geom_text(mapping=aes(x=Russia, y=Frequency,
+                        label=percent(Frequency)), size=5, nudge_y=0.03)
+
+
+West<- table(EU2021$West)
+West_p<-prop.table(West)
+West_df<-as.data.frame(West_p)
+names(West_df) <- c("West", "Frequency")
+West_df$West<-recode_factor(West_df$West, '1' = "Yes", '0'= "No")
+ggplot(data=West_df, mapping=aes(x=West, y=Frequency)) + 
+  geom_col()+
+  scale_y_continuous(label=percent)+
+  geom_col(fill="red", alpha=0.5)+
+  labs(title="Support for EU Membership",
+    subtitle="Percentage of individuals supporting EU Membership",
+    caption="Source: The Caucasus Barometer Regional 2013",
+    x="Support for EU Membership", y="")+
+  theme_bw() + 
+  theme(title=element_text(size=14), axis.text=element_text(size=12)) +
+  theme(panel.grid.major.x = element_blank())+
+  geom_text(mapping=aes(x=West, y=Frequency,
+                        label=percent(Frequency)), size=5, nudge_y=0.03)
+```
+
+
+## Models 
+
+### Preference for USA
+```{r}
+##2017
+m1<-glm(iden~critgov+eng, data = EU2017, family="binomial")
+m2<-glm(iden~critgov+eng+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2017, family="binomial")
+m3<-glm(iden~humvs+English, data = EU2017, family="binomial")
+m4<-glm(iden~humvs+English+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2017, family="binomial")
+m5<-glm(GEPOLUS~iden, data = EU2017, family="binomial")
+m6<-glm(GEPOLUS~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2017, family="binomial")
+m7<-glm(GEECOUS~iden, data = EU2017, family="binomial")
+m8<-glm(GEECOUS~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2017, family="binomial")
+m9<-glm(USA~iden, data = EU2017, family="binomial")
+m10<-glm(USA~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2017, family="binomial")
+stargazer(m1, m2, m3, m4, m5, m6,m7, m8,m9, m10)
+
+##2019
+m1<-glm(iden~critgov+eng, data = EU2019, family="binomial")
+m2<-glm(iden~critgov+eng+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2019, family="binomial")
+m3<-glm(iden~humvs+English, data = EU2019, family="binomial")
+m4<-glm(iden~humvs+English+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2019, family="binomial")
+m5<-glm(GEPOLUS~iden, data = EU2019, family="binomial")
+m6<-glm(GEPOLUS~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2019, family="binomial")
+m7<-glm(GEECOUS~iden, data = EU2019, family="binomial")
+m8<-glm(GEECOUS~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2019, family="binomial")
+m9<-glm(USA~iden, data = EU2019, family="binomial")
+m10<-glm(USA~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2019, family="binomial")
+stargazer(m1, m2, m3, m4, m5, m6,m7, m8,m9, m10)
+
+##2021
+m1<-glm(iden~critgov+eng, data = EU2021, family="binomial")
+m2<-glm(iden~critgov+eng+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+m3<-glm(iden~humvs+English, data = EU2021, family="binomial")
+m4<-glm(iden~humvs+English+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+m5<-glm(GEPOLUS~iden, data = EU2021, family="binomial")
+m6<-glm(GEPOLUS~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+m7<-glm(GEECOUS~iden, data = EU2021, family="binomial")
+m8<-glm(GEECOUS~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+m9<-glm(USA~iden, data = EU2021, family="binomial")
+m10<-glm(USA~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+stargazer(m1, m2, m3, m4, m5, m6,m7, m8,m9, m10, type = "text")
+
+```
+
+
+### Opposition to Russia 
+```{r}
+##2017
+m1<-glm(iden~GOVTROL, data = EU2017, family="binomial")
+m2<-glm(iden~GOVTROL+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2017, family="binomial")
+m3<-glm(GEPOLRU~iden, data = EU2017, family="binomial")
+m4<-glm(GEPOLRU~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2017, family="binomial")
+m5<-glm(GEECORU~iden, data = EU2017, family="binomial")
+m6<-glm(GEECORU~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2017, family="binomial")
+m7<-glm(Russia~iden, data = EU2017, family="binomial")
+m8<-glm(Russia~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2017, family="binomial")
+stargazer(m1, m2, m3, m4, m5, m6, m7, m8)
+
+
+##2019
+m1<-glm(iden~GOVTROL, data = EU2019, family="binomial")
+m2<-glm(iden~GOVTROL+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2019, family="binomial")
+m3<-glm(GEPOLRU~iden, data = EU2019, family="binomial")
+m4<-glm(GEPOLRU~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2019, family="binomial")
+m5<-glm(GEECORU~iden, data = EU2019, family="binomial")
+m6<-glm(GEECORU~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2019, family="binomial")
+m7<-glm(Russia~iden, data = EU2019, family="binomial")
+m8<-glm(Russia~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2019, family="binomial")
+stargazer(m1, m2, m3, m4, m5, m6,m7, m8)
+
+##2021
+m1<-glm(iden~GOVTROL, data = EU2021, family="binomial")
+m2<-glm(iden~GOVTROL+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+m3<-glm(GEPOLRU~iden, data = EU2021, family="binomial")
+m4<-glm(GEPOLRU~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+m5<-glm(GEECORU~iden, data = EU2021, family="binomial")
+m6<-glm(GEECORU~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+m7<-glm(Russia~iden, data = EU2021, family="binomial")
+m8<-glm(Russia~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+stargazer(m1, m2, m3, m4, m5, m6, m7, m8)
+```
+
+
+### Testing Causal Mechanisms
+```{r}
+#Testing Causal Mechanisms: shared iden->threat->preference
+
+##2017
+m1<-polr(as.factor(threatr)~iden, data = EU2017, Hess = "T")
+m2<-polr(as.factor(threatr)~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2017, Hess = "T")
+m3<-glm(GEPOLUS~threatr, data = EU2017, family="binomial")
+m4<-glm(GEPOLUS~threatr+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2017, family="binomial")
+m5<-glm(GEECOUS~threatr, data = EU2017, family="binomial")
+m6<-glm(GEECOUS~threatr+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2017, family="binomial")
+m7<-glm(USA~threatr, data = EU2017, family="binomial")
+m8<-glm(USA~threatr+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2017, family="binomial")
+stargazer(m1, m2, m3, m4, m5, m6,m7, m8)
+
+#2019
+m1<-polr(as.factor(threatr)~iden, data = EU2019, Hess = "T")
+m2<-polr(as.factor(threatr)~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2019, Hess = "T")
+m3<-glm(GEPOLUS~threatr, data = EU2019, family="binomial")
+m4<-glm(GEPOLUS~threatr+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2019, family="binomial")
+m5<-glm(GEECOUS~threatr, data = EU2019, family="binomial")
+m6<-glm(GEECOUS~threatr+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2019, family="binomial")
+m7<-glm(USA~threatr, data = EU2019, family="binomial")
+m8<-glm(USA~threatr+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2019, family="binomial")
+stargazer(m1, m2, m3, m4, m5, m6,m7, m8)
+
+#2021s
+m1<-polr(as.factor(threatr)~iden, data = EU2021, Hess = "T")
+m2<-polr(as.factor(threatr)~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, Hess = "T")
+m3<-glm(GEPOLUS~threatr, data = EU2021, family="binomial")
+m4<-glm(GEPOLUS~threatr+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+m5<-glm(GEECOUS~threatr, data = EU2021, family="binomial")
+m6<-glm(GEECOUS~threatr+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+m7<-glm(USA~threatr, data = EU2021, family="binomial")
+m8<-glm(USA~threatr+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+m9<-polr(as.factor(rusgov_fav)~GEPOLUS+GEECOUS, data =NDI2022M, Hess = "T")
+m10<-polr(as.factor(rusgov_fav)~GEPOLUS+GEECOUS+rus_agg+eco_dec+gov_trust+sex+age+educ, data =NDI2022M, Hess = "T")
+m11<-glm(GEPOLUS~rus_agg+eco_dec+gov_trust+sex+age+educ, data =NDI2022M, family="binomial")
+m12<-glm(GEECOUS~rus_agg+eco_dec+gov_trust+sex+age+educ, data =NDI2022M, family="binomial")
+stargazer(m1, m2, m3, m4, m5, m6,m7, m8,m9,m10, m11, m12)
+
+#Russia 
+##2017
+m1<-glm(GEPOLRU~threatr, data = EU2017, family="binomial")
+m2<-glm(GEPOLRU~threatr+relser+rus+eng+gov_trust+ecrung+sex+age+educ+income, data = EU2017, family="binomial")
+m3<-glm(GEECORU~threatr, data = EU2017, family="binomial")
+m4<-glm(GEECORU~threatr+relser+rus+eng+gov_trust+ecrung+sex+age+educ+income, data = EU2017, family="binomial")
+m5<-glm(Russia~threatr, data = EU2017, family="binomial")
+m6<-glm(Russia~threatr+relser+rus+eng+gov_trust+ecrung+sex+age+educ+income, data = EU2017, family="binomial")
+stargazer(m1, m2, m3, m4, m5, m6, type="text")
+
+#2019
+m1<-glm(GEPOLRU~threatr, data = EU2019, family="binomial")
+m2<-glm(GEPOLRU~threatr+relser+rus+eng+gov_trust+ecrung+sex+age+educ+income, data = EU2019, family="binomial")
+m3<-glm(GEECORU~threatr, data = EU2019, family="binomial")
+m4<-glm(GEECORU~threatr+relser+rus+eng+gov_trust+ecrung+sex+age+educ+income, data = EU2019, family="binomial")
+m5<-glm(Russia~threatr, data = EU2019, family="binomial")
+m6<-glm(Russia~threatr+relser+rus+eng+gov_trust+ecrung+sex+age+educ+income, data = EU2019, family="binomial")
+stargazer(m1, m2, m3, m4, m5, m6,type="text")
+
+#2021
+m1<-glm(GEPOLRU~threatr, data = EU2021, family="binomial")
+m2<-glm(GEPOLRU~threatr+relser+rus+eng+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+m3<-glm(GEECORU~threatr, data = EU2021, family="binomial")
+m4<-glm(GEECORU~threatr+relser+rus+eng+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+m5<-glm(Russia~threatr, data = EU2021, family="binomial")
+m6<-glm(Russia~threatr+relser+rus+eng+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+stargazer(m1, m2, m3, m4, m5, m6, type="text")
+```
+
+### Alternative measure of IV
+```{r}
+m1<-glm(GEPOLUS~id, data = EU2017, family="binomial")
+m2<-glm(GEPOLUS~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2017, family="binomial")
+m3<-glm(GEECOUS~id, data = EU2017, family="binomial")
+m4<-glm(GEECOUS~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2017, family="binomial")
+m5<-glm(USA~id, data = EU2017, family="binomial")
+m6<-glm(USA~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2017, family="binomial")
+m7<-glm(GEPOLRU~id, data = EU2017, family="binomial")
+m8<-glm(GEPOLRU~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2017, family="binomial")
+m9<-glm(GEECORU~id, data = EU2017, family="binomial")
+m10<-glm(GEECORU~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2017, family="binomial")
+m11<-glm(Russia~id, data = EU2017, family="binomial")
+m12<-glm(Russia~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2017, family="binomial")
+stargazer(m1, m2, m3, m4, m5, m6,m7, m8,m9,m10,m11,m12)
+
+##2019
+m1<-glm(GEPOLUS~id, data = EU2019, family="binomial")
+m2<-glm(GEPOLUS~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2019, family="binomial")
+m3<-glm(GEECOUS~id, data = EU2019, family="binomial")
+m4<-glm(GEECOUS~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2019, family="binomial")
+m5<-glm(USA~id, data = EU2019, family="binomial")
+m6<-glm(USA~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2019, family="binomial")
+m7<-glm(GEPOLRU~id, data = EU2019, family="binomial")
+m8<-glm(GEPOLRU~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2019, family="binomial")
+m9<-glm(GEECORU~id, data = EU2019, family="binomial")
+m10<-glm(GEECORU~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2019, family="binomial")
+m11<-glm(Russia~id, data = EU2019, family="binomial")
+m12<-glm(Russia~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2019, family="binomial")
+stargazer(m1, m2, m3, m4, m5, m6,m7, m8,m9,m10, m11,m12)
+
+##2021
+m1<-glm(GEPOLUS~id, data = EU2021, family="binomial")
+m2<-glm(GEPOLUS~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+m3<-glm(GEECOUS~id, data = EU2021, family="binomial")
+m4<-glm(GEECOUS~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+m5<-glm(USA~id, data = EU2021, family="binomial")
+m6<-glm(USA~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+m7<-glm(GEPOLRU~id, data = EU2021, family="binomial")
+m8<-glm(GEPOLRU~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+m9<-glm(GEECORU~id, data = EU2021, family="binomial")
+m10<-glm(GEECORU~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+m11<-glm(Russia~id, data = EU2021, family="binomial")
+m12<-glm(Russia~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+stargazer(m1, m2, m3, m4, m5, m6,m7, m8,m9,m10, m11, m12, type = "text")
+```
+
+
+### Further tests for robustness check
+```{r}
+m1<-glm(West~iden, data = EU2021, family="binomial")
+m2<-glm(West~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+m3<-glm(West~id, data = EU2021, family="binomial")
+m4<-glm(West~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+m5<-glm(West~threatr, data = EU2021, family="binomial")
+m6<-glm(West~threatr+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+m7<-glm(GEPOLRU~threatr, data = EU2021, family="binomial")
+m8<-glm(GEPOLRU~threatr+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+m9<-glm(GEECORU~threatr, data = EU2021, family="binomial")
+m10<-glm(GEECORU~threatr+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+m11<-glm(Russia~threatr, data = EU2021, family="binomial")
+m12<-glm(Russia~threatr+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+stargazer(m1, m2, m3, m4, m5, m6,m7, m8,m9,m10, m11, m12)
+```
+
+## Machine Learning 
+
+### GEPOLUS
+```{r}
+df<-EU2021
+
+#The base model with education. sex, and age
+sample_split <- sample.split(Y = df$GEPOLUS, SplitRatio = 0.7)
+train_set <- subset(x = df, sample_split == TRUE)
+test_set <- subset(x = df, sample_split == FALSE)
+m1<-glm(GEPOLUS~sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m1, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEPOLUS), positive = as.character(1))
+
+#The base model+income
+m2<-glm(GEPOLUS~sex+age+educ+income, data =train_set, family="binomial")
+probs <- predict(m2, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEPOLUS), positive = as.character(1))
+
+#The base model+economic status
+m3<-glm(GEPOLUS~ecrung+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m3, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEPOLUS), positive = as.character(1))
+
+#the base model+religiosity
+m4<-glm(GEPOLUS~relser+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m4, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEPOLUS), positive = as.character(1))
+
+#the base model+Russain language skills
+m5<-glm(GEPOLUS~rus+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m5, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEPOLUS), positive = as.character(1))
+
+#the base model+Trust in Government 
+m6<-glm(GEPOLUS~gov_trust+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m6, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEPOLUS), positive = as.character(1))
+
+#the base model and shared identity
+m7<-glm(GEPOLUS~iden+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m7, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEPOLUS), positive = as.character(1))
+
+
+
+polus<-ggplot(POLUS, aes(x, y)) +        # ggplot2 plot with confidence intervals
+  geom_point(shape=21, size=2, fill="red") +
+  geom_vline(xintercept = 0.636, size =1, linetype="dotdash")+
+  geom_errorbar(width=0.15, aes(xmin = lower, xmax = upper))+
+  labs(title = "",
+              x= "Political Ties:USA",
+              y= "Variables")+
+  theme(axis.text.y=element_text(size=rel(1.25)))
+```
+
+### GEECOUS
+```{r}
+df<-EU2021
+
+#The base model with education. sex, and age
+sample_split <- sample.split(Y = df$GEECOUS, SplitRatio = 0.7)
+train_set <- subset(x = df, sample_split == TRUE)
+test_set <- subset(x = df, sample_split == FALSE)
+m1<-glm(GEECOUS~sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m1, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEECOUS), positive = as.character(1))
+
+#The base model+income
+m2<-glm(GEECOUS~sex+age+educ+income, data =train_set, family="binomial")
+probs <- predict(m2, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEECOUS), positive = as.character(1))
+
+#The base model+economic status
+m3<-glm(GEECOUS~ecrung+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m3, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEECOUS), positive = as.character(1))
+
+#the base model+religiosity
+m4<-glm(GEECOUS~relser+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m4, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEECOUS), positive = as.character(1))
+
+#the base model+Russain language skills
+m5<-glm(GEECOUS~rus+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m5, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEECOUS), positive = as.character(1))
+
+#the base model+Trust in Government 
+m6<-glm(GEECOUS~gov_trust+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m6, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEECOUS), positive = as.character(1))
+
+#the base model and shared identity
+m7<-glm(GEECOUS~iden+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m7, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEECOUS), positive = as.character(1))
+
+
+
+ecous<-ggplot(ECOUS, aes(x, y)) +        # ggplot2 plot with confidence intervals
+  geom_point(shape=21, size=2, fill="red") +
+  geom_vline(xintercept = 0.5980, size =1, linetype="dotdash")+
+  geom_errorbar(width=0.15, aes(xmin = lower, xmax = upper))+
+  labs(title = "",
+              x= "Economic Ties:USA",
+              y= "Variables")+
+  theme(axis.text.y=element_text(size=rel(1.25)))
+```
+
+### GEPOLRU
+```{r}
+df<-EU2021
+
+#The base model with education. sex, and age
+sample_split <- sample.split(Y = df$GEPOLRU, SplitRatio = 0.7)
+train_set <- subset(x = df, sample_split == TRUE)
+test_set <- subset(x = df, sample_split == FALSE)
+m1<-glm(GEPOLRU~sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m1, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEPOLRU), positive = as.character(1))
+
+#The base model+income
+m2<-glm(GEPOLRU~sex+age+educ+income, data =train_set, family="binomial")
+probs <- predict(m2, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEPOLRU), positive = as.character(1))
+
+#The base model+economic status
+m3<-glm(GEPOLRU~ecrung+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m3, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEPOLRU), positive = as.character(1))
+
+#the base model+religiosity
+m4<-glm(GEPOLRU~relser+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m4, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEPOLRU), positive = as.character(1))
+
+#the base model+Russain language skills
+m5<-glm(GEPOLRU~rus+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m5, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEPOLRU), positive = as.character(1))
+
+#the base model+Trust in Government 
+m6<-glm(GEPOLRU~gov_trust+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m6, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEPOLRU), positive = as.character(1))
+
+#the base model and shared identity
+m7<-glm(GEPOLRU~iden+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m7, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEPOLRU), positive = as.character(1))
+
+
+polru<-ggplot(POLRU, aes(x, y)) +        # ggplot2 plot with confidence intervals
+  geom_point(shape=21, size=2, fill="red") +
+  geom_vline(xintercept =0.6535, size =1, linetype="dotdash")+
+  geom_errorbar(width=0.15, aes(xmin = lower, xmax = upper))+
+  labs(title = "",
+              x= "Political Ties: Russia",
+              y= "Variables")+
+  theme(axis.text.y=element_text(size=rel(1.25)))
+```
+
+
+### GEECORU
+```{r}
+df<-EU2021
+
+#The base model with education. sex, and age
+sample_split <- sample.split(Y = df$GEECORU, SplitRatio = 0.7)
+train_set <- subset(x = df, sample_split == TRUE)
+test_set <- subset(x = df, sample_split == FALSE)
+m1<-glm(GEECORU~sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m1, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEECORU), positive = as.character(1))
+
+#The base model+income
+m2<-glm(GEECORU~sex+age+educ+income, data =train_set, family="binomial")
+probs <- predict(m2, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEECORU), positive = as.character(1))
+
+#The base model+economic status
+m3<-glm(GEECORU~ecrung+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m3, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEECORU), positive = as.character(1))
+
+#the base model+religiosity
+m4<-glm(GEECORU~relser+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m4, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEECORU), positive = as.character(1))
+
+#the base model+Russain language skills
+m5<-glm(GEECORU~rus+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m5, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEECORU), positive = as.character(1))
+
+#the base model+Trust in Government 
+m6<-glm(GEECORU~gov_trust+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m6, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEECORU), positive = as.character(1))
+
+#the base model and shared identity
+m7<-glm(GEECORU~iden+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m7, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$GEECORU), positive = as.character(1))
+
+
+
+ecoru<-ggplot(ECORU, aes(x, y)) +        # ggplot2 plot with confidence intervals
+  geom_point(shape=21, size=2, fill="red") +
+  geom_vline(xintercept =0.6189, size =1, linetype="dotdash")+
+  geom_errorbar(width=0.15, aes(xmin = lower, xmax = upper))+
+  labs(title = "",
+              x= "Economic Ties: Russia",
+              y= "Variables")+
+  theme(axis.text.y=element_text(size=rel(1.25)))
+```
+
+### Russia
+```{r}
+df<-EU2021
+
+#The base model with education. sex, and age
+sample_split <- sample.split(Y = df$Russia, SplitRatio = 0.7)
+train_set <- subset(x = df, sample_split == TRUE)
+test_set <- subset(x = df, sample_split == FALSE)
+m1<-glm(Russia~sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m1, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$Russia), positive = as.character(1))
+
+#The base model+income
+m2<-glm(Russia~sex+age+educ+income, data =train_set, family="binomial")
+probs <- predict(m2, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$Russia), positive = as.character(1))
+
+#The base model+economic status
+m3<-glm(Russia~ecrung+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m3, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$Russia), positive = as.character(1))
+
+#the base model+religiosity
+m4<-glm(Russia~relser+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m4, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$Russia), positive = as.character(1))
+
+#the base model+Russain language skills
+m5<-glm(Russia~rus+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m5, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$Russia), positive = as.character(1))
+
+#the base model+Trust in Government 
+m6<-glm(Russia~gov_trust+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m6, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$Russia), positive = as.character(1))
+
+#the base model and shared identity
+m7<-glm(Russia~iden+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m7, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$Russia), positive = as.character(1))
+
+
+
+russia<-ggplot(Russia, aes(x, y)) +        # ggplot2 plot with confidence intervals
+  geom_point(shape=21, size=2, fill="red") +
+  geom_vline(xintercept =0.8245, size =1, linetype="dotdash")+
+  geom_errorbar(width=0.15, aes(xmin = lower, xmax = upper))+
+  labs(title = "",
+              x= "Preference for Russia",
+              y= "Variables")+
+  theme(axis.text.y=element_text(size=rel(1.25)))
+```
+
+### USA
+```{r}
+df<-EU2021
+
+#The base model with education. sex, and age
+sample_split <- sample.split(Y = df$USA, SplitRatio = 0.7)
+train_set <- subset(x = df, sample_split == TRUE)
+test_set <- subset(x = df, sample_split == FALSE)
+m1<-glm(USA~sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m1, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$USA), positive = as.character(1))
+
+#The base model+income
+m2<-glm(USA~sex+age+educ+income, data =train_set, family="binomial")
+probs <- predict(m2, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$USA), positive = as.character(1))
+
+#The base model+economic status
+m3<-glm(USA~ecrung+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m3, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$USA), positive = as.character(1))
+
+#the base model+religiosity
+m4<-glm(USA~relser+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m4, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$USA), positive = as.character(1))
+
+#the base model+Russain language skills
+m5<-glm(USA~rus+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m5, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$USA), positive = as.character(1))
+
+#the base model+Trust in Government 
+m6<-glm(USA~gov_trust+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m6, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$USA), positive = as.character(1))
+
+#the base model and shared identity
+m7<-glm(USA~iden+sex+age+educ, data =train_set, family="binomial")
+probs <- predict(m7, newdata=test_set, type = "response")
+pred <- ifelse(probs > 0.5, 1, 0)
+confusionMatrix(factor(pred), factor(test_set$USA), positive = as.character(1))
+
+usa<-ggplot(USA, aes(x, y)) +        # ggplot2 plot with confidence intervals
+  geom_point(shape=21, size=2, fill="red") +
+  geom_vline(xintercept =0.7710, size =1, linetype="dotdash")+
+  geom_errorbar(width=0.15, aes(xmin = lower, xmax = upper))+
+  labs(title = "",
+              x= "Preference for USA",
+              y= "Variables")+
+  theme(axis.text.y=element_text(size=rel(1.25)))
+```
+
+
+
+## Predicted Probabilities
+### From main models 
+```{r}
+m1<-glm(GEPOLUS~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family = "binomial")
+# Create a temporary data frame of hypothetical values
+temp.data <- data.frame(iden = rep(seq(0, 1, 1), 1,na.rm=T ),
+                        relser=mean(EU2021$relser, na.rm=T),
+                        rus=mean(EU2021$rus, na.rm=T),
+                        gov_trust=mean(EU2021$gov_trust, na.rm=T),
+                        ecrung=mean(EU2021$ecrung, na.rm=T),
+                        sex=median(EU2021$sex, na.rm=T),
+                        age=mean(EU2021$age, na.rm=T),
+                        educ=mean(EU2021$educ, na.rm=T),
+                        income=mean(EU2021$income, na.rm=T)
+)
+
+# Predict the fitted values given the model and hypothetical data
+predicted.data <- as.data.frame(predict(m1, newdata = temp.data, 
+                                        type="link", se=TRUE))
+
+# Combine the hypothetical data and predicted values
+new.data <- cbind(temp.data, predicted.data)
+
+# Calculate confidence intervals
+std <- qnorm(0.95 / 2 + 0.5)
+new.data$ymin <- m1$family$linkinv(new.data$fit - std * new.data$se.fit)
+new.data$ymax <- m1$family$linkinv(new.data$fit + std * new.data$se.fit)
+new.data$fit <- m1$family$linkinv(new.data$fit)  # Rescale to 0-1
+names<-c("No Shared Identity", "Shared Identity")
+new.data$group<-factor(names,levels=names)
+# Plot everything
+
+
+ggplot(aes(x=group, y=fit,ymin=ymin, ymax=ymax, color=group),data=new.data)+
+  geom_linerange(size=1)+
+  scale_color_manual(values=c("#FF3300", "#FF3300", "#3399FF","#3399FF"))+
+  geom_point(size=12,shape=21, fill="white")+
+  geom_text(x=c(1,2), y=new.data$fit, label=round(new.data$fit,2))+
+  labs(x="", y="Pr(Political Ties with United States)")+
+  theme_bw()+
+  theme(legend.position="none", 
+        axis.text.x =  element_text(size=10, face="bold",margin = margin(t = 10, r = 0, b = 0, l = 0)),
+        axis.title.y = element_text(size=15,margin = margin(t = 0, r = 20, b = 0, l = 20)))
+
+
+
+
+m2<-glm(GEECOUS~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+# Create a temporary data frame of hypothetical values
+temp.data <- data.frame(iden = rep(seq(0, 1, 1), 1),
+                        relser=mean(EU2021$relser, na.rm=T),
+                        rus=mean(EU2021$rus, na.rm=T),
+                        gov_trust=mean(EU2021$gov_trust, na.rm=T),
+                        ecrung=mean(EU2021$ecrung, na.rm=T),
+                        sex=median(EU2021$sex, na.rm=T),
+                        age=mean(EU2021$age, na.rm=T),
+                        educ=mean(EU2021$educ, na.rm=T),
+                        income=mean(EU2021$income, na.rm=T)
+)
+
+# Predict the fitted values given the model and hypothetical data
+predicted.data <- as.data.frame(predict(m2, newdata = temp.data, 
+                                        type="link", se=TRUE))
+
+# Combine the hypothetical data and predicted values
+new.data <- cbind(temp.data, predicted.data)
+
+# Calculate confidence intervals
+std <- qnorm(0.95 / 2 + 0.5)
+new.data$ymin <- m2$family$linkinv(new.data$fit - std * new.data$se.fit)
+new.data$ymax <- m2$family$linkinv(new.data$fit + std * new.data$se.fit)
+new.data$fit <- m2$family$linkinv(new.data$fit)  # Rescale to 0-1
+names<-c("No Shared Identity", "Shared Identity")
+new.data$group<-factor(names,levels=names)
+# Plot everything
+
+
+ggplot(aes(x=group, y=fit,ymin=ymin, ymax=ymax, color=group),data=new.data)+
+  geom_linerange(size=1)+
+  scale_color_manual(values=c("#FF3300", "#FF3300", "#3399FF","#3399FF"))+
+  geom_point(size=12,shape=21, fill="white")+
+  geom_text(x=c(1,2), y=new.data$fit, label=round(new.data$fit,2))+
+  labs(x="", y="Pr(Economic Ties with United States)")+
+  theme_bw()+
+  theme(legend.position="none", 
+        axis.text.x =  element_text(size=10, face="bold",margin = margin(t = 10, r = 0, b = 0, l = 0)),
+        axis.title.y = element_text(size=15,margin = margin(t = 0, r = 20, b = 0, l = 20)))
+
+
+m3<-glm(USA~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+# Create a temporary data frame of hypothetical values
+temp.data <- data.frame(iden = rep(seq(0, 1, 1), 1),
+                        relser=mean(EU2021$relser, na.rm=T),
+                        rus=mean(EU2021$rus, na.rm=T),
+                        gov_trust=mean(EU2021$gov_trust, na.rm=T),
+                        ecrung=mean(EU2021$ecrung, na.rm=T),
+                        sex=median(EU2021$sex, na.rm=T),
+                        age=mean(EU2021$age, na.rm=T),
+                        educ=mean(EU2021$educ, na.rm=T),
+                        income=mean(EU2021$income, na.rm=T)
+)
+
+# Predict the fitted values given the model and hypothetical data
+predicted.data <- as.data.frame(predict(m3, newdata = temp.data, 
+                                        type="link", se=TRUE))
+
+# Combine the hypothetical data and predicted values
+new.data <- cbind(temp.data, predicted.data)
+
+# Calculate confidence intervals
+std <- qnorm(0.95 / 2 + 0.5)
+new.data$ymin <- m3$family$linkinv(new.data$fit - std * new.data$se.fit)
+new.data$ymax <- m3$family$linkinv(new.data$fit + std * new.data$se.fit)
+new.data$fit <- m3$family$linkinv(new.data$fit)  # Rescale to 0-1
+names<-c("No Shared Identity", "Shared Identity")
+new.data$group<-factor(names,levels=names)
+# Plot everything
+
+
+ggplot(aes(x=group, y=fit,ymin=ymin, ymax=ymax, color=group),data=new.data)+
+  geom_linerange(size=1)+
+  scale_color_manual(values=c("#FF3300", "#FF3300", "#3399FF","#3399FF"))+
+  geom_point(size=12,shape=21, fill="white")+
+  geom_text(x=c(1,2), y=new.data$fit, label=round(new.data$fit,2))+
+  labs(x="", y="Pr(Preference for The United States)")+
+  theme_bw()+
+  theme(legend.position="none", 
+        axis.text.x =  element_text(size=10, face="bold",margin = margin(t = 10, r = 0, b = 0, l = 0)),
+        axis.title.y = element_text(size=15,margin = margin(t = 0, r = 20, b = 0, l = 20)))
+
+
+
+
+
+m4<-glm(GEPOLRU~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+# Create a temporary data frame of hypothetical values
+temp.data <- data.frame(iden = rep(seq(0, 1, 1), 1),
+                        relser=mean(EU2021$relser, na.rm=T),
+                        rus=mean(EU2021$rus, na.rm=T),
+                        gov_trust=mean(EU2021$gov_trust, na.rm=T),
+                        ecrung=mean(EU2021$ecrung, na.rm=T),
+                        sex=median(EU2021$sex, na.rm=T),
+                        age=mean(EU2021$age, na.rm=T),
+                        educ=mean(EU2021$educ, na.rm=T),
+                        income=mean(EU2021$income, na.rm=T)
+)
+
+# Predict the fitted values given the model and hypothetical data
+predicted.data <- as.data.frame(predict(m4, newdata = temp.data, 
+                                        type="link", se=TRUE))
+
+# Combine the hypothetical data and predicted values
+new.data <- cbind(temp.data, predicted.data)
+
+# Calculate confidence intervals
+std <- qnorm(0.95 / 2 + 0.5)
+new.data$ymin <- m4$family$linkinv(new.data$fit - std * new.data$se.fit)
+new.data$ymax <- m4$family$linkinv(new.data$fit + std * new.data$se.fit)
+new.data$fit <- m4$family$linkinv(new.data$fit)  # Rescale to 0-1
+names<-c("No Shared Identity", "Shared Identity")
+new.data$group<-factor(names,levels=names)
+# Plot everything
+
+
+ggplot(aes(x=group, y=fit,ymin=ymin, ymax=ymax, color=group),data=new.data)+
+  geom_linerange(size=1)+
+  scale_color_manual(values=c("#FF3300", "#FF3300", "#3399FF","#3399FF"))+
+  geom_point(size=12,shape=21, fill="white")+
+  geom_text(x=c(1,2), y=new.data$fit, label=round(new.data$fit,2))+
+  labs(x="", y="Pr(Political Ties with Russia)")+
+  theme_bw()+
+  theme(legend.position="none", 
+        axis.text.x =  element_text(size=10, face="bold",margin = margin(t = 10, r = 0, b = 0, l = 0)),
+        axis.title.y = element_text(size=15,margin = margin(t = 0, r = 20, b = 0, l = 20)))
+
+
+
+
+
+m5<-glm(GEECORU~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+# Create a temporary data frame of hypothetical values
+temp.data <- data.frame(iden = rep(seq(0, 1, 1), 1),
+                        relser=mean(EU2021$relser, na.rm=T),
+                        rus=mean(EU2021$rus, na.rm=T),
+                        gov_trust=mean(EU2021$gov_trust, na.rm=T),
+                        ecrung=mean(EU2021$ecrung, na.rm=T),
+                        sex=median(EU2021$sex, na.rm=T),
+                        age=mean(EU2021$age, na.rm=T),
+                        educ=mean(EU2021$educ, na.rm=T),
+                        income=mean(EU2021$income, na.rm=T)
+)
+
+# Predict the fitted values given the model and hypothetical data
+predicted.data <- as.data.frame(predict(m5, newdata = temp.data, 
+                                        type="link", se=TRUE))
+
+# Combine the hypothetical data and predicted values
+new.data <- cbind(temp.data, predicted.data)
+
+# Calculate confidence intervals
+std <- qnorm(0.95 / 2 + 0.5)
+new.data$ymin <- m5$family$linkinv(new.data$fit - std * new.data$se.fit)
+new.data$ymax <- m5$family$linkinv(new.data$fit + std * new.data$se.fit)
+new.data$fit <- m5$family$linkinv(new.data$fit)  # Rescale to 0-1
+names<-c("No Shared Identity", "Shared Identity")
+new.data$group<-factor(names,levels=names)
+# Plot everything
+
+
+ggplot(aes(x=group, y=fit,ymin=ymin, ymax=ymax, color=group),data=new.data)+
+  geom_linerange(size=1)+
+  scale_color_manual(values=c("#FF3300", "#FF3300", "#3399FF","#3399FF"))+
+  geom_point(size=12,shape=21, fill="white")+
+  geom_text(x=c(1,2), y=new.data$fit, label=round(new.data$fit,2))+
+  labs(x="", y="Pr(Economic Ties with Russia)")+
+  theme_bw()+
+  theme(legend.position="none", 
+        axis.text.x =  element_text(size=10, face="bold",margin = margin(t = 10, r = 0, b = 0, l = 0)),
+        axis.title.y = element_text(size=15,margin = margin(t = 0, r = 20, b = 0, l = 20)))
+
+
+
+
+m6<-glm(Russia~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+# Create a temporary data frame of hypothetical values
+temp.data <- data.frame(iden = rep(seq(0, 1, 1), 1),
+                        relser=mean(EU2021$relser, na.rm=T),
+                        rus=mean(EU2021$rus, na.rm=T),
+                        gov_trust=mean(EU2021$gov_trust, na.rm=T),
+                        ecrung=mean(EU2021$ecrung, na.rm=T),
+                        sex=median(EU2021$sex, na.rm=T),
+                        age=mean(EU2021$age, na.rm=T),
+                        educ=mean(EU2021$educ, na.rm=T),
+                        income=mean(EU2021$income, na.rm=T)
+)
+
+# Predict the fitted values given the model and hypothetical data
+predicted.data <- as.data.frame(predict(m6, newdata = temp.data, 
+                                        type="link", se=TRUE))
+
+# Combine the hypothetical data and predicted values
+new.data <- cbind(temp.data, predicted.data)
+
+# Calculate confidence intervals
+std <- qnorm(0.95 / 2 + 0.5)
+new.data$ymin <- m6$family$linkinv(new.data$fit - std * new.data$se.fit)
+new.data$ymax <- m6$family$linkinv(new.data$fit + std * new.data$se.fit)
+new.data$fit <- m6$family$linkinv(new.data$fit)  # Rescale to 0-1
+names<-c("No Shared Identity", "Shared Identity")
+new.data$group<-factor(names,levels=names)
+# Plot everything
+
+
+ggplot(aes(x=group, y=fit,ymin=ymin, ymax=ymax, color=group),data=new.data)+
+  geom_linerange(size=1)+
+  scale_color_manual(values=c("#FF3300", "#FF3300", "#3399FF","#3399FF"))+
+  geom_point(size=12,shape=21, fill="white")+
+  geom_text(x=c(1,2), y=new.data$fit, label=round(new.data$fit,2))+
+  labs(x="", y="Pr(Preference for Russia)")+
+  theme_bw()+
+  theme(legend.position="none", 
+        axis.text.x =  element_text(size=10, face="bold",margin = margin(t = 10, r = 0, b = 0, l = 0)),
+        axis.title.y = element_text(size=15,margin = margin(t = 0, r = 20, b = 0, l = 20)))
+
+
+
+m7<-glm(West~iden+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+# Create a temporary data frame of hypothetical values
+temp.data <- data.frame(iden = rep(seq(0, 1, 1), 1),
+                        relser=mean(EU2021$relser, na.rm=T),
+                        rus=mean(EU2021$rus, na.rm=T),
+                        gov_trust=mean(EU2021$gov_trust, na.rm=T),
+                        ecrung=mean(EU2021$ecrung, na.rm=T),
+                        sex=median(EU2021$sex, na.rm=T),
+                        age=mean(EU2021$age, na.rm=T),
+                        educ=mean(EU2021$educ, na.rm=T),
+                        income=mean(EU2021$income, na.rm=T)
+)
+
+# Predict the fitted values given the model and hypothetical data
+predicted.data <- as.data.frame(predict(m7, newdata = temp.data, 
+                                        type="link", se=TRUE))
+
+# Combine the hypothetical data and predicted values
+new.data <- cbind(temp.data, predicted.data)
+
+# Calculate confidence intervals
+std <- qnorm(0.95 / 2 + 0.5)
+new.data$ymin <- m7$family$linkinv(new.data$fit - std * new.data$se.fit)
+new.data$ymax <- m7$family$linkinv(new.data$fit + std * new.data$se.fit)
+new.data$fit <- m7$family$linkinv(new.data$fit)  # Rescale to 0-1
+names<-c("No Shared Identity", "Shared Identity")
+new.data$group<-factor(names,levels=names)
+# Plot everything
+
+
+ggplot(aes(x=group, y=fit,ymin=ymin, ymax=ymax, color=group),data=new.data)+
+  geom_linerange(size=1)+
+  scale_color_manual(values=c("#FF3300", "#FF3300", "#3399FF","#3399FF"))+
+  geom_point(size=12,shape=21, fill="white")+
+  geom_text(x=c(1,2), y=new.data$fit, label=round(new.data$fit,2))+
+  labs(x="", y="Pr(Preference for West)")+
+  theme_bw()+
+  theme(legend.position="none", 
+        axis.text.x =  element_text(size=10, face="bold",margin = margin(t = 10, r = 0, b = 0, l = 0)),
+        axis.title.y = element_text(size=15,margin = margin(t = 0, r = 20, b = 0, l = 20)))
+```
+
+
+
+
+### Predictied Probabilities: Alternative Measure of Shared Identity 
+```{r}
+m1<-glm(GEPOLUS~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family = "binomial")
+# Create a temporary data frame of hypothetical values
+temp.data <- data.frame(id = rep(seq(0, 1, 1), 1,na.rm=T ),
+                        relser=mean(EU2021$relser, na.rm=T),
+                        rus=mean(EU2021$rus, na.rm=T),
+                        gov_trust=mean(EU2021$gov_trust, na.rm=T),
+                        ecrung=mean(EU2021$ecrung, na.rm=T),
+                        sex=median(EU2021$sex, na.rm=T),
+                        age=mean(EU2021$age, na.rm=T),
+                        educ=mean(EU2021$educ, na.rm=T),
+                        income=mean(EU2021$income, na.rm=T)
+)
+
+# Predict the fitted values given the model and hypothetical data
+predicted.data <- as.data.frame(predict(m1, newdata = temp.data, 
+                                        type="link", se=TRUE))
+
+# Combine the hypothetical data and predicted values
+new.data <- cbind(temp.data, predicted.data)
+
+# Calculate confidence intervals
+std <- qnorm(0.95 / 2 + 0.5)
+new.data$ymin <- m1$family$linkinv(new.data$fit - std * new.data$se.fit)
+new.data$ymax <- m1$family$linkinv(new.data$fit + std * new.data$se.fit)
+new.data$fit <- m1$family$linkinv(new.data$fit)  # Rescale to 0-1
+names<-c("No Shared Identity(alternative)", "Shared Identity(alternative)")
+new.data$group<-factor(names,levels=names)
+# Plot everything
+
+
+ggplot(aes(x=group, y=fit,ymin=ymin, ymax=ymax, color=group),data=new.data)+
+  geom_linerange(size=1)+
+  scale_color_manual(values=c("#FF3300", "#FF3300", "#3399FF","#3399FF"))+
+  geom_point(size=12,shape=21, fill="white")+
+  geom_text(x=c(1,2), y=new.data$fit, label=round(new.data$fit,2))+
+  labs(x="", y="Pr(Political Ties with United States)")+
+  theme_bw()+
+  theme(legend.position="none", 
+        axis.text.x =  element_text(size=10, face="bold",margin = margin(t = 10, r = 0, b = 0, l = 0)),
+        axis.title.y = element_text(size=15,margin = margin(t = 0, r = 20, b = 0, l = 20)))
+
+
+
+
+m2<-glm(GEECOUS~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+# Create a temporary data frame of hypothetical values
+temp.data <- data.frame(id = rep(seq(0, 1, 1), 1),
+                        relser=mean(EU2021$relser, na.rm=T),
+                        rus=mean(EU2021$rus, na.rm=T),
+                        gov_trust=mean(EU2021$gov_trust, na.rm=T),
+                        ecrung=mean(EU2021$ecrung, na.rm=T),
+                        sex=median(EU2021$sex, na.rm=T),
+                        age=mean(EU2021$age, na.rm=T),
+                        educ=mean(EU2021$educ, na.rm=T),
+                        income=mean(EU2021$income, na.rm=T)
+)
+
+# Predict the fitted values given the model and hypothetical data
+predicted.data <- as.data.frame(predict(m2, newdata = temp.data, 
+                                        type="link", se=TRUE))
+
+# Combine the hypothetical data and predicted values
+new.data <- cbind(temp.data, predicted.data)
+
+# Calculate confidence intervals
+std <- qnorm(0.95 / 2 + 0.5)
+new.data$ymin <- m2$family$linkinv(new.data$fit - std * new.data$se.fit)
+new.data$ymax <- m2$family$linkinv(new.data$fit + std * new.data$se.fit)
+new.data$fit <- m2$family$linkinv(new.data$fit)  # Rescale to 0-1
+names<-c("No Shared Identity(alternative)", "Shared Identity(alternative)")
+new.data$group<-factor(names,levels=names)
+# Plot everything
+
+
+ggplot(aes(x=group, y=fit,ymin=ymin, ymax=ymax, color=group),data=new.data)+
+  geom_linerange(size=1)+
+  scale_color_manual(values=c("#FF3300", "#FF3300", "#3399FF","#3399FF"))+
+  geom_point(size=12,shape=21, fill="white")+
+  geom_text(x=c(1,2), y=new.data$fit, label=round(new.data$fit,2))+
+  labs(x="", y="Pr(Economic Ties with United States)")+
+  theme_bw()+
+  theme(legend.position="none", 
+        axis.text.x =  element_text(size=10, face="bold",margin = margin(t = 10, r = 0, b = 0, l = 0)),
+        axis.title.y = element_text(size=15,margin = margin(t = 0, r = 20, b = 0, l = 20)))
+
+
+m3<-glm(USA~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+# Create a temporary data frame of hypothetical values
+temp.data <- data.frame(id= rep(seq(0, 1, 1), 1),
+                        relser=mean(EU2021$relser, na.rm=T),
+                        rus=mean(EU2021$rus, na.rm=T),
+                        gov_trust=mean(EU2021$gov_trust, na.rm=T),
+                        ecrung=mean(EU2021$ecrung, na.rm=T),
+                        sex=median(EU2021$sex, na.rm=T),
+                        age=mean(EU2021$age, na.rm=T),
+                        educ=mean(EU2021$educ, na.rm=T),
+                        income=mean(EU2021$income, na.rm=T)
+)
+
+# Predict the fitted values given the model and hypothetical data
+predicted.data <- as.data.frame(predict(m3, newdata = temp.data, 
+                                        type="link", se=TRUE))
+
+# Combine the hypothetical data and predicted values
+new.data <- cbind(temp.data, predicted.data)
+
+# Calculate confidence intervals
+std <- qnorm(0.95 / 2 + 0.5)
+new.data$ymin <- m3$family$linkinv(new.data$fit - std * new.data$se.fit)
+new.data$ymax <- m3$family$linkinv(new.data$fit + std * new.data$se.fit)
+new.data$fit <- m3$family$linkinv(new.data$fit)  # Rescale to 0-1
+names<-c("No Shared Identity(alternative)", "Shared Identity(alternative)")
+new.data$group<-factor(names,levels=names)
+# Plot everything
+
+
+ggplot(aes(x=group, y=fit,ymin=ymin, ymax=ymax, color=group),data=new.data)+
+  geom_linerange(size=1)+
+  scale_color_manual(values=c("#FF3300", "#FF3300", "#3399FF","#3399FF"))+
+  geom_point(size=12,shape=21, fill="white")+
+  geom_text(x=c(1,2), y=new.data$fit, label=round(new.data$fit,2))+
+  labs(x="", y="Pr(Preference for The United States)")+
+  theme_bw()+
+  theme(legend.position="none", 
+        axis.text.x =  element_text(size=10, face="bold",margin = margin(t = 10, r = 0, b = 0, l = 0)),
+        axis.title.y = element_text(size=15,margin = margin(t = 0, r = 20, b = 0, l = 20)))
+
+
+
+
+
+m4<-glm(GEPOLRU~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+# Create a temporary data frame of hypothetical values
+temp.data <- data.frame(id= rep(seq(0, 1, 1), 1),
+                        relser=mean(EU2021$relser, na.rm=T),
+                        rus=mean(EU2021$rus, na.rm=T),
+                        gov_trust=mean(EU2021$gov_trust, na.rm=T),
+                        ecrung=mean(EU2021$ecrung, na.rm=T),
+                        sex=median(EU2021$sex, na.rm=T),
+                        age=mean(EU2021$age, na.rm=T),
+                        educ=mean(EU2021$educ, na.rm=T),
+                        income=mean(EU2021$income, na.rm=T)
+)
+
+# Predict the fitted values given the model and hypothetical data
+predicted.data <- as.data.frame(predict(m4, newdata = temp.data, 
+                                        type="link", se=TRUE))
+
+# Combine the hypothetical data and predicted values
+new.data <- cbind(temp.data, predicted.data)
+
+# Calculate confidence intervals
+std <- qnorm(0.95 / 2 + 0.5)
+new.data$ymin <- m4$family$linkinv(new.data$fit - std * new.data$se.fit)
+new.data$ymax <- m4$family$linkinv(new.data$fit + std * new.data$se.fit)
+new.data$fit <- m4$family$linkinv(new.data$fit)  # Rescale to 0-1
+names<-c("No Shared Identity(alternative)", "Shared Identity(alternative)")
+new.data$group<-factor(names,levels=names)
+# Plot everything
+
+
+ggplot(aes(x=group, y=fit,ymin=ymin, ymax=ymax, color=group),data=new.data)+
+  geom_linerange(size=1)+
+  scale_color_manual(values=c("#FF3300", "#FF3300", "#3399FF","#3399FF"))+
+  geom_point(size=12,shape=21, fill="white")+
+  geom_text(x=c(1,2), y=new.data$fit, label=round(new.data$fit,2))+
+  labs(x="", y="Pr(Political Ties with Russia)")+
+  theme_bw()+
+  theme(legend.position="none", 
+        axis.text.x =  element_text(size=10, face="bold",margin = margin(t = 10, r = 0, b = 0, l = 0)),
+        axis.title.y = element_text(size=15,margin = margin(t = 0, r = 20, b = 0, l = 20)))
+
+
+
+
+
+m5<-glm(GEECORU~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+# Create a temporary data frame of hypothetical values
+temp.data <- data.frame(id = rep(seq(0, 1, 1), 1),
+                        relser=mean(EU2021$relser, na.rm=T),
+                        rus=mean(EU2021$rus, na.rm=T),
+                        gov_trust=mean(EU2021$gov_trust, na.rm=T),
+                        ecrung=mean(EU2021$ecrung, na.rm=T),
+                        sex=median(EU2021$sex, na.rm=T),
+                        age=mean(EU2021$age, na.rm=T),
+                        educ=mean(EU2021$educ, na.rm=T),
+                        income=mean(EU2021$income, na.rm=T)
+)
+
+# Predict the fitted values given the model and hypothetical data
+predicted.data <- as.data.frame(predict(m5, newdata = temp.data, 
+                                        type="link", se=TRUE))
+
+# Combine the hypothetical data and predicted values
+new.data <- cbind(temp.data, predicted.data)
+
+# Calculate confidence intervals
+std <- qnorm(0.95 / 2 + 0.5)
+new.data$ymin <- m5$family$linkinv(new.data$fit - std * new.data$se.fit)
+new.data$ymax <- m5$family$linkinv(new.data$fit + std * new.data$se.fit)
+new.data$fit <- m5$family$linkinv(new.data$fit)  # Rescale to 0-1
+names<-c("No Shared Identity(alternative)", "Shared Identity(alternative)")
+new.data$group<-factor(names,levels=names)
+# Plot everything
+
+
+ggplot(aes(x=group, y=fit,ymin=ymin, ymax=ymax, color=group),data=new.data)+
+  geom_linerange(size=1)+
+  scale_color_manual(values=c("#FF3300", "#FF3300", "#3399FF","#3399FF"))+
+  geom_point(size=12,shape=21, fill="white")+
+  geom_text(x=c(1,2), y=new.data$fit, label=round(new.data$fit,2))+
+  labs(x="", y="Pr(Economic Ties with Russia)")+
+  theme_bw()+
+  theme(legend.position="none", 
+        axis.text.x =  element_text(size=10, face="bold",margin = margin(t = 10, r = 0, b = 0, l = 0)),
+        axis.title.y = element_text(size=15,margin = margin(t = 0, r = 20, b = 0, l = 20)))
+
+
+
+
+m6<-glm(Russia~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+# Create a temporary data frame of hypothetical values
+temp.data <- data.frame(id = rep(seq(0, 1, 1), 1),
+                        relser=mean(EU2021$relser, na.rm=T),
+                        rus=mean(EU2021$rus, na.rm=T),
+                        gov_trust=mean(EU2021$gov_trust, na.rm=T),
+                        ecrung=mean(EU2021$ecrung, na.rm=T),
+                        sex=median(EU2021$sex, na.rm=T),
+                        age=mean(EU2021$age, na.rm=T),
+                        educ=mean(EU2021$educ, na.rm=T),
+                        income=mean(EU2021$income, na.rm=T)
+)
+
+# Predict the fitted values given the model and hypothetical data
+predicted.data <- as.data.frame(predict(m6, newdata = temp.data, 
+                                        type="link", se=TRUE))
+
+# Combine the hypothetical data and predicted values
+new.data <- cbind(temp.data, predicted.data)
+
+# Calculate confidence intervals
+std <- qnorm(0.95 / 2 + 0.5)
+new.data$ymin <- m6$family$linkinv(new.data$fit - std * new.data$se.fit)
+new.data$ymax <- m6$family$linkinv(new.data$fit + std * new.data$se.fit)
+new.data$fit <- m6$family$linkinv(new.data$fit)  # Rescale to 0-1
+names<-c("No Shared Identity(alternative)", "Shared Identity(alternative)")
+new.data$group<-factor(names,levels=names)
+# Plot everything
+
+
+ggplot(aes(x=group, y=fit,ymin=ymin, ymax=ymax, color=group),data=new.data)+
+  geom_linerange(size=1)+
+  scale_color_manual(values=c("#FF3300", "#FF3300", "#3399FF","#3399FF"))+
+  geom_point(size=12,shape=21, fill="white")+
+  geom_text(x=c(1,2), y=new.data$fit, label=round(new.data$fit,2))+
+  labs(x="", y="Pr(Preference for Russia)")+
+  theme_bw()+
+  theme(legend.position="none", 
+        axis.text.x =  element_text(size=10, face="bold",margin = margin(t = 10, r = 0, b = 0, l = 0)),
+        axis.title.y = element_text(size=15,margin = margin(t = 0, r = 20, b = 0, l = 20)))
+
+
+
+
+m7<-glm(West~id+relser+rus+gov_trust+ecrung+sex+age+educ+income, data = EU2021, family="binomial")
+# Create a temporary data frame of hypothetical values
+temp.data <- data.frame(id = rep(seq(0, 1, 1), 1),
+                        relser=mean(EU2021$relser, na.rm=T),
+                        rus=mean(EU2021$rus, na.rm=T),
+                        gov_trust=mean(EU2021$gov_trust, na.rm=T),
+                        ecrung=mean(EU2021$ecrung, na.rm=T),
+                        sex=median(EU2021$sex, na.rm=T),
+                        age=mean(EU2021$age, na.rm=T),
+                        educ=mean(EU2021$educ, na.rm=T),
+                        income=mean(EU2021$income, na.rm=T)
+)
+
+# Predict the fitted values given the model and hypothetical data
+predicted.data <- as.data.frame(predict(m7, newdata = temp.data, 
+                                        type="link", se=TRUE))
+
+# Combine the hypothetical data and predicted values
+new.data <- cbind(temp.data, predicted.data)
+
+# Calculate confidence intervals
+std <- qnorm(0.95 / 2 + 0.5)
+new.data$ymin <- m7$family$linkinv(new.data$fit - std * new.data$se.fit)
+new.data$ymax <- m7$family$linkinv(new.data$fit + std * new.data$se.fit)
+new.data$fit <- m7$family$linkinv(new.data$fit)  # Rescale to 0-1
+names<-c("No Shared Identity(alternative)", "Shared Identity(alternative)")
+new.data$group<-factor(names,levels=names)
+# Plot everything
+
+
+ggplot(aes(x=group, y=fit,ymin=ymin, ymax=ymax, color=group),data=new.data)+
+  geom_linerange(size=1)+
+  scale_color_manual(values=c("#FF3300", "#FF3300", "#3399FF","#3399FF"))+
+  geom_point(size=12,shape=21, fill="white")+
+  geom_text(x=c(1,2), y=new.data$fit, label=round(new.data$fit,2))+
+  labs(x="", y="Pr(Preference for West)")+
+  theme_bw()+
+  theme(legend.position="none", 
+        axis.text.x =  element_text(size=10, face="bold",margin = margin(t = 10, r = 0, b = 0, l = 0)),
+        axis.title.y = element_text(size=15,margin = margin(t = 0, r = 20, b = 0, l = 20)))
+```
+
+```{r}
+library(writexl)
+write_xlsx(EU2021, "EU2021.xlsx")
+```
