@@ -1,6 +1,6 @@
 # **Research Projects Repository**
 
-![Work in Progress Banner](Work_in_Progress.png)
+![Work in Progress Banner](Work-in-Progress.jpg)
 
 ## **Overview**  
 This repository contains replication files, codes, and supplementary materials for my current working papers. Each folder represents a specific project or working paper. As analyses progress, additional codes and materials will be added, showcasing the ongoing development of my research.
