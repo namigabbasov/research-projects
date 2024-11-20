@@ -3,14 +3,14 @@
 ![Work in Progress Banner](Work-in-Progress.jpg)
 
 ## **Overview**  
-This repository contains replication files, codes, and supplementary materials for my current working papers. Each folder represents a specific project or working paper. As analyses progress, additional codes and materials will be added, showcasing the ongoing development of my research.
+This repository contains replication files, codes, and supplementary materials for my current working papers. Each folder represents a specific project or working paper. As analyses progress, additional codes and materials will be added.
 
 ---
 
 ## **Purpose**  
 - Provide transparency and reproducibility for my research.  
 - Centralize all project-related materials in one location.  
-- Document the progression of my working papers.
+- Document progression of my working papers.
 
 ---
 
