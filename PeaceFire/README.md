@@ -1,4 +1,4 @@
-# **Ceasefire Now, War Later? A Global Analysis of War Recurrence.**
+# **A Global Analysis of War Recurrence.**
 
 ![Random Survival Forest Banner](RandomSurvivalForest.png)
 
