@@ -21,18 +21,18 @@ This project undertakes an ambitious goal of predicting the sucess/failure of pe
 - **Datasets**:  
   - **Peace Agreements Database**: Primary source of unstructured text from peace agreements.
   - **UCDP Peace Agreement Dataset**: Provides success/failure labels for agreements.
-  - **UN General Debate Speeches**: Analyzed for textual similarity to assess alignment or divergence.  
+  - **UN General Debate Speeches**: Analyze for text similarity to assess alignment/divergence.  
 
 - **Models and Tools**:  
-  - **LLMs**: BERT, T5, and others for classification and similarity analysis.  
-  - **Text Analysis**: fine-tuning LLMs from Hugging Face hub
+  - **LLMs**: BERT, T5, and others for text classification and similarity analysis.  
+  - **Text Analysis**: fine-tuning LLMs from Hugging Face
 
 ---
 
 ## **Work in Progress**  
 - **Status**:  
-  - This research is a work in progress, and findings are not yet available.  
-  - The research abstract will be presented at the **CWC on LLMs and GenAI at Southern Political Science Association** conference.  
+  - This research is a work in progress and findings are not available yet.  
+  - The research will be presented at the **CWC on LLMs and GenAI at Southern Political Science Association** conference.  
 
 - **Next Steps**:  
   - Conduct detailed text analysis using Python.  
