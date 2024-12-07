@@ -3,20 +3,17 @@
 ![Random Survival Forest Banner](RandomSurvivalForest.png)
 
 ## **Overview**  
-More than half of all civil wars that ended between 1945 and 2022 later resumed. Expanding on previous research, this study theorizes, disaggregates, and assesses how the nature of war termination shapes the likelihood that conflicts will recur.  
-
-We conjecture that wars are more likely to repeat after ceasefires than after peace agreements and military victories. This project investigates the mechanisms that render ceasefires more likely to reignite wars relative to other outcomes, including rearmament, alliance formation, and nation-state building.
+More than half of all civil wars that ended between 1945 and 2022 later resumed. Expanding on previous research, this study theorizes, disaggregates, and assesses how the nature of war termination shapes the likelihood that conflicts will recur. Using matching, Inverse Propensity Weighting(IPW), and entropy balancing,  It finds that wars are more likely to repeat after ceasefires than after peace agreements and military victories.  This project investigates the mechanisms that render ceasefires more likely to reignite wars relative to other outcomes: rearmament, alliance formation, and nation-state building.
 
 ---
 
 ## **Key Contributions**  
 1. **Theoretical Advancement**:  
-   - Proposes and tests mechanisms linking war termination outcomes to conflict recurrence.  
+   - Proposes and tests mechanisms linking war termination outcomes to conflict recurrence with causal identification techniques   
 2. **Empirical Insights**:  
-   - Analyzes global data on civil war terminations and recurrences from 1945–2022 using Cox models and Random Survival Forests.  
-3. **Case Study Exploration**:  
-   - Explores ongoing Nagorno-Karabakh conflict through original interviews to illustrate theorized mechanisms.  
-
+   - Analyzes global data on civil war terminations and recurrences from 1945–2022 using Cox models and Random Survival Forests and integrating NHST with prediction
+3. **Policy Implications**:
+   - calls policymakers and conflict resolution mediators to be caution about ceasefires and making sure that it leads to peace agreement . 
 ---
 
 ## **Methodology**  
