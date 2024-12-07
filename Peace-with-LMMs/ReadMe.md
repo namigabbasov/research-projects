@@ -32,7 +32,7 @@ This project undertakes an ambitious goal of predicting the sucess/failure of pe
 ## **Work in Progress**  
 - **Status**:  
   - This research is a work in progress, and findings are not yet available.  
-  - The research abstract has been accepted for presentation at the **CWC on LLMs and GenAI at Southern Political Science Association** conference.  
+  - The research abstract will be presented at the **CWC on LLMs and GenAI at Southern Political Science Association** conference.  
 
 - **Next Steps**:  
   - Conduct detailed text analysis using Python.  
