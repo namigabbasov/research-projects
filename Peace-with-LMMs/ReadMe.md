@@ -1,4 +1,4 @@
-# **Predicting Peace Agreement Success with LLMS**
+# **Predicting Peace Agreement Success with LLMs**
 
 ![Peace with LLMs Banner](peacewithLLMs.png)
 
