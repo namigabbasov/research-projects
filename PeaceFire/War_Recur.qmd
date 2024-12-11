@@ -1555,7 +1555,6 @@ library(survival)
 library(dplyr)
 library(caret)
 
-# Assuming 'episodes' is already loaded
 
 # Applying labels
 episodes_a <- apply_labels(episodes, 
@@ -1657,7 +1656,6 @@ library(survival)
 library(dplyr)
 library(caret)
 
-# Assuming 'episodes' is already loaded
 
 # Applying labels
 episodes_a <- apply_labels(episodes, 
@@ -1752,7 +1750,7 @@ library(ggplot2)
 library(dplyr)
 library(tidyr)
 
-# Assuming 'episodes' is your dataset
+
 
 # Subsetting and cleaning data
 X <- subset(episodes, select = c(time_to_recur_any, recur_any, dis, cease, govvic, rebvic, peace, W4, pko_u, log_dur, 
@@ -1829,7 +1827,6 @@ library(ggplot2)
 library(dplyr)
 library(tidyr)
 
-# Assuming 'episodes' is your dataset
 
 # Subsetting and cleaning data
 X <- subset(episodes, select = c(time_to_recur, recur_side, dis, cease, govvic, rebvic, peace, W4, pko_u, log_dur, 
@@ -2192,7 +2189,7 @@ stargazer(m1_m, m2_m, m3_m, m4_m, type = "text")
 ### Coefficeint plots
 
 ```{r}
-# Extracting model coefficients and robust standard errors from the summary
+# Extracting model coefficients and robust standard errors from summary
 coef_summary <- summary(m2_m)$coefficients
 
 # Rename terms for better readability
@@ -2217,7 +2214,7 @@ terms_rename <- c(
   "al_religion2000" = "Religion Fractionalization"
 )
 
-# Create a dataframe for plotting
+# Create dataframe for plotting
 df_coef <- data.frame(
   Term = rownames(coef_summary),
   Estimate = coef_summary[, "coef"],
@@ -2227,7 +2224,7 @@ df_coef <- data.frame(
   p_value = coef_summary[, "Pr(>|z|)"]
 )
 
-# Apply the renaming to the Term column
+# Apply renaming to Term column
 df_coef$Term <- terms_rename[df_coef$Term]
 
 # Order by Estimate from most negative to most positive
@@ -2244,7 +2241,7 @@ coef_ucdp<-ggplot(df_coef, aes(x = Estimate, y = reorder(Term, Estimate))) +
        y = "Variables")
 
 
-# Extracting model coefficients and robust standard errors from the summary
+# Extracting model coefficients and robust standard errors from summary
 coef_summary <- summary(m4_m)$coefficients
 
 # Rename terms for better readability
@@ -2279,7 +2276,7 @@ df_coef <- data.frame(
   p_value = coef_summary[, "Pr(>|z|)"]
 )
 
-# Apply renaming to the Term column
+# Apply renaming to Term column
 df_coef$Term <- terms_rename[df_coef$Term]
 
 # Order by Estimate from most negative to most positive
@@ -2307,7 +2304,7 @@ outcome_levels <- c("Peace Agreement", "Ceasefire", "Gov Victory", "Rebel Victor
 # Convert outcome variable to factor with specified levels in the original dataset
 matched_data$outcomes <- factor(matched_data$outcome, levels = 1:6, labels = outcome_levels)
 
-# Convert the time variables from days to years in the original dataset
+# Convert time variables from days to years in original dataset
 matched_data$time_to_recur_any_years <- matched_data$time_to_recur_any / 365.25
 matched_data$time_to_recur_years <- matched_data$time_to_recur / 365.25
 
@@ -2346,7 +2343,7 @@ representative_data <- matched_data |>
   )
 
 
-# Expand the data to include different outcomes
+# Expand data to include different outcomes
 expanded_data <- do.call(rbind, replicate(6, representative_data, simplify = FALSE))
 expanded_data$outcomes <- factor(rep(outcome_levels, each = 1), levels = outcome_levels)
 
@@ -2379,7 +2376,7 @@ plot_any <- ggsurvplot(
   linetype = "solid"  # Set line type to solid for all curves
 )
 
-# Customize the legend font size and axis titles for Any Recurrence plot
+# Customize legend font size and axis titles for Any Recurrence plot
 plot_any$plot <- plot_any$plot +
   theme(legend.text = element_text(size = 12),  # Increase legend text size
         legend.title = element_text(size = 14),  # Increase legend title size
@@ -2389,7 +2386,7 @@ plot_any$plot <- plot_any$plot +
         axis.text.y = element_text(size = 10),   # Y-axis text size
         plot.title = element_text(size = 12))    # Plot title size
 
-# Customize the risk table text for Any Recurrence plot
+# Customize risk table text for Any Recurrence plot
 plot_any$table <- plot_any$table +
   scale_x_continuous(breaks = seq(0, 30, by = 5), labels = seq(0, 30, by = 5)) +  # Breaks and labels in years
   theme(axis.text.x = element_text(size = 10, angle = 45, hjust = 1))  # Rotate risk table text
@@ -2436,7 +2433,7 @@ plot_side$table <- plot_side$table +
   scale_x_continuous(breaks = seq(0, 30, by = 5), labels = seq(0, 30, by = 5)) +  # Breaks and labels in years
   theme(axis.text.x = element_text(size = 10, angle = 45, hjust = 1))  # Rotate risk table text
 
-# Print the plots
+# Print plots
 print(plot_any)
 print(plot_side)
 ```
@@ -2470,17 +2467,17 @@ for (i in seq_along(folds)) {
   # Extract 'stab_ipw' column as weights for training
   train_weights <- train_data$stab_ipw
   
-  # Remove 'stab_ipw' and 'conflict_id' from training data passed to the model
+  # Remove 'stab_ipw' and 'conflict_id' from training data passed to model
   train_data <- train_data %>% select(-stab_ipw, -conflict_id)
   
-  # Train the Random Survival Forest model with stabilized IPWs and cluster by 'conflict_id'
+  # Train Random Survival Forest model with stabilized IPWs and cluster by 'conflict_id'
   rsf <- rfsrc(Surv(time_to_recur_any, recur_any) ~ ., data = train_data, 
                ntree = 1000, nodesize = 5, nsplit = 50, importance = TRUE, 
                case.wt = train_weights, 
                block.size = 1, 
                cluster = X$conflict_id[train_indices])
   
-  # Store the variable importance scores
+  # Store variable importance scores
   importance_list[[i]] <- rsf$importance
 }
 
@@ -2529,11 +2526,11 @@ fit <- rfsrc(Surv(time_to_recur_any, recur_any) ~ ., data = X,
              case.wt = train_weights, 
                cluster = X$conflict_id[train_indices])
 
-# Predict survival probabilities for the entire dataset
+# Predict survival probabilities for entire dataset
 pred <- predict(fit, X, OOB = TRUE, type = "response")
 survival_probs <- as.data.frame(pred$survival)
 
-# Extract time points (already in years)
+# Extract time points
 time_points <- fit$time.interest
 colnames(survival_probs) <- paste("Time", round(time_points, 2), sep = "_")
 survival_probs$id <- 1:nrow(survival_probs)
@@ -2544,7 +2541,7 @@ survival_probs_long <- survival_probs %>%
   pivot_longer(cols = -id, names_to = "Time", values_to = "Probability") %>%
   mutate(Time = as.numeric(gsub("Time_", "", Time)))
 
-# Combine with the original data to get the binary outcome variables
+# Combine with original data to get binary outcome variables
 survival_probs_long <- left_join(survival_probs_long, X, by = "id")
 
 # Function to calculate mean and confidence intervals
@@ -2602,17 +2599,17 @@ library(sandwich)
 library(tableone)
 library(survival)
 
-# Step 1: Estimate Propensity Scores with Logistic Regression Model
+# Estimate Propensity Scores with Logistic Regression Model
 model <- glm(cease ~ log_dur + cold_war + log_gdp + veto_u + p_polity2 + fe_etfra + log_pop + al_religion2000 + fe_cultdiv + W4, 
              data = eps_match, family = "binomial")
 eps <- predict(model, type = "response")
 
-# Step 2: Calculate Raw Weights for ATE
+# Calculate Raw Weights for ATE
 n.treated <- sum(eps_match$cease == 1)
 n.control <- sum(eps_match$cease == 0)
 weights <- ifelse(eps_match$cease == 1, 1 / eps, 1 / (1 - eps))
 
-# Step 3: Visualize Weights
+# Visualize Weights
 temp.data <- data.frame(weights = weights, treated = as.factor(eps_match$cease))
 
 # Histogram of weights
@@ -2624,7 +2621,7 @@ ggplot(temp.data, aes(x = weights, fill = treated, color = treated)) +
 ggplot(temp.data, aes(x = treated, y = weights, color = treated)) + 
   geom_boxplot() 
 
-# Step 4: Define Love Plot Function to Check Covariate Balance
+# Define Love Plot Function to Check Covariate Balance
 love.plot <- function(cov, treat, weights = rep(1, length(treat)), plot = FALSE) {
   treat.means <- colSums(cov[treat == 1,] * weights[treat == 1]) / sum(weights[treat == 1])
   treat.var <- colSums(t(t(cov[treat == 1,]) - treat.means)^2 * weights[treat == 1]) / sum(weights[treat == 1])
@@ -2644,7 +2641,7 @@ love.plot <- function(cov, treat, weights = rep(1, length(treat)), plot = FALSE)
   return(smd)
 }
 
-# Step 5: Calculate SMD for Covariate Balance (Before and After Weighting)
+# Calculate SMD for Covariate Balance (Before and After Weighting)
 covariates <- eps_match[, c("log_dur", "cold_war", "log_gdp", "veto_u", "p_polity2", "fe_etfra", "log_pop", "al_religion2000", "fe_cultdiv", "W4")]
 raw.smd <- love.plot(covariates, eps_match$cease)
 weighted.smd <- love.plot(covariates, eps_match$cease, weights = weights)
@@ -2661,12 +2658,12 @@ ggplot(plot.data) + geom_point(aes(x = as.numeric(smd), y = covariates, color = 
       xlim(-range, range) +
       labs(x = 'Standardized Difference in Means')
 
-# Step 6: Alternative Approach - Check Balance Using Survey Package
+# Alternative Approach - Check Balance Using Survey Package
 weighteddata <- svydesign(ids = ~ 1, data = eps_match, weights = ~weights)
 weightedtable <- svyCreateTableOne(vars = colnames(covariates), strata = "cease", data = weighteddata, test = FALSE)
 print(weightedtable, smd = TRUE) # Shows SMDs for weighted data
 
-# Step 7: Trim Extreme Propensity Scores
+# Trim Extreme Propensity Scores
 temp.data <- data.frame(eps = eps, treated = as.factor(eps_match$cease))
 
 # Histogram of eps before trimming
@@ -2686,7 +2683,7 @@ temp.data <- data.frame(weights = weights, treated = as.factor(eps_match$cease))
 ggplot(temp.data[-rm.idx, ], aes(x = treated, y = weights, color = treated)) + 
   geom_boxplot() 
 
-# Step 8: Covariate Balance Check After Trimming
+# Covariate Balance Check After Trimming
 raw.smd <- love.plot(eps_match[-rm.idx, c("log_dur", "cold_war", "log_gdp", "veto_u", "p_polity2", "fe_etfra", "log_pop", "al_religion2000", "fe_cultdiv", "W4")], 
                      eps_match$cease[-rm.idx])
 weighted.smd <- love.plot(eps_match[-rm.idx, c("log_dur", "cold_war", "log_gdp", "veto_u", "p_polity2", "fe_etfra", "log_pop", "al_religion2000", "fe_cultdiv", "W4")], 
@@ -2703,7 +2700,7 @@ ggplot(plot.data) + geom_point(aes(x = as.numeric(smd), y = covariates, color = 
       xlim(-range, range) +
       labs(x = 'Standardized Difference in Means')
 
-# Step 9: Estimate Causal Effect with Cox Proportional Hazards Model
+# Estimate Causal Effect with Cox Proportional Hazards Model
 cox_model <- coxph(Surv(time_to_recur_any, recur_any) ~ cease + dis + govvic + rebvic + lowac + pko_u + log_dur + cold_war + log_gdp + veto_u + ter_war + gov_war + p_polity2 + fe_etfra + log_pop + al_religion2000 + fe_cultdiv + W4 + ps_original, 
                    data = eps_match[-rm.idx, ], 
                    weights = weights[-rm.idx], 
