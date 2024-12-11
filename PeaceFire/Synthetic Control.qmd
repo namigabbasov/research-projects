@@ -27,16 +27,16 @@ library(gridExtra)
 set.seed(123)
 
 ### Parameters
-num_countries <- 10          ### Total number of conflicts
-num_years <- 21              ### From 1980 to 2000
+num_conflicts <- 10          ### Total number of conflicts
+num_years <- 30              ### From 1991 to 2020
 intervention_year <- 1994    ### Year of ceasefire intervention
 treated_unit <- "Nagorno Karabakh" ### Name of treated conflict
 
 ### Generate conflict names
-conflicts <- c(treated_unit, paste0("Conflict", 2:num_countries))
+conflicts <- c(treated_unit, paste0("Conflict", 2:num_conflicts))
 
 ### Create dataset
-years <- 1980:2000
+years <- 1991:2020
 data <- expand.grid(Year = years, Conflict = conflicts)
 data <- data[order(data$Conflict, data$Year), ]
 
