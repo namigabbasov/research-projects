@@ -291,7 +291,7 @@ X_with_rebvic <- X_with_rebvic %>% mutate(across(everything(), as.numeric))
 metrics_cox_with_rebvic <- numeric(20)
 metrics_rsf_with_rebvic <- numeric(20)
 
-# Run the models 20 times for the model with 'rebvic'
+# Run models 20 times for model with 'rebvic'
 for (i in 1:20) {
   index_data <- createFolds(1:nrow(X_with_rebvic), 2)
   train_indices <- index_data[[1]]
@@ -585,7 +585,7 @@ for (var in additional_vars) {
   cindex_cox <- numeric(20)
   cindex_rsf <- numeric(20)
   
-  # Run the models 20 times
+  # Run models 20 times
   for (i in 1:20) {
     index_data <- createFolds(1:nrow(X), 2)
     train_indices <- index_data[[1]]
