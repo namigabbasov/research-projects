@@ -3,9 +3,9 @@
 ![Predictions Banner](preds.png)
 
 ## **Overview**  
-This project explores the use of survival-based machine learning algorithms to predict civil war recurrence, addressing shortcomings in traditional approaches such as the Cox proportional hazards model. While the null hypothesis significance testing (NHST) approach has been instrumental in theoretical advancements, it lacks robust predictive capabilities and is prone to overfitting due to the absence of data partitioning.  
+This project explores the use of survival-based machine learning algorithms to predict civil war recurrence, addressing shortcomings in traditional approaches such as the Cox proportional hazards model. While the null hypothesis significance testing (NHST) approach has been instrumental in theoretical advancements, it lacks predictive capabilities and is prone to overfitting due to the absence of data partitioning.  
 
-To overcome these limitations, this study evaluates five groups of machine learning algorithms specialized for survival analysis. The goal is to enhance the predictability of civil war recurrence and to adapt methods traditionally used in medical research for conflict studies.
+To overcome these limitations, this study evaluates five groups of machine learning algorithms specialized for survival analysis. The goal is to forecast civil war recurrence, adapting machine learning models tailored for survival analysis traditionally used in medical research, for conflict studies.
 
 ---
 
