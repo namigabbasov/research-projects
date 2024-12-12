@@ -1,6 +1,6 @@
 # **A Global Analysis of War Recurrence**
 
-![Random Survival Forest Banner](RandomSurvivalForest.pn)
+![Random Survival Forest Banner](RandomSurvivalForest.png)
 
 ## **Overview**  
 More than half of all civil wars that ended between 1945 and 2022 later resumed. Expanding on previous research, this study theorizes, disaggregates, and assesses how the nature of war termination shapes the likelihood that conflicts will recur. Using matching, Inverse Propensity Weighting(IPW), and entropy balancing,  It finds that wars are more likely to repeat after ceasefires than after peace agreements and military victories.  This project investigates the mechanisms that render ceasefires more likely to reignite wars relative to other outcomes: rearmament, alliance formation, and nation-state building.
