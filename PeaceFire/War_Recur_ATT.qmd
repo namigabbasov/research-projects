@@ -1,0 +1,2786 @@
+---
+title: "War Recurrence ATE"
+format: pdf
+editor: visual
+---
+
+## Libraries
+
+```{r}
+# install.packages("readxl")
+# install.packages("tidyverse")
+# install.packages("ggplot2")
+# install.packages("survminer")
+# install.packages("timeROC")
+# install.packages("caret")
+# install.packages("timeROC")
+# install.packages("caret")
+# Install and load necessary packages
+# install.packages("randomForestSRC")
+# install.packages("tidyr")
+#install.packages("Synth")
+#install.packages("MatchIt")
+#install.packages("tableone")
+
+
+library(Synth)
+library(pec)
+library(expss)
+library(tidyr)
+library(caret)
+library(stargazer)
+library(survival)
+library(survminer)
+library(car)
+library(carData)
+library(readxl)
+library(car)
+library(carData)
+library(date)
+library(readxl)
+library(scales)
+library(dplyr)
+library(gridExtra)
+library(stargazer)
+library(readxl)
+library(car)
+library(tidyverse)
+library(survival)
+library(survminer)
+library(carData)
+library(readxl)
+library(carData)
+options(scipen=999)
+library(date)
+library(readxl)
+library(scales)
+library(ggplot2)
+library(gridExtra)
+library(randomForestSRC)
+library(readxl)
+library(pec)
+library(timeROC)
+library(survivalROC)
+library(ggplot2)
+library(expss)
+library(survival)
+library(dplyr)
+library(caret)
+library(randomForestSRC)
+library(readxl)
+library(pec)
+library(timeROC)
+library(survivalROC)
+library(ggplot2)
+library(expss)
+library(survival)
+library(dplyr)
+library(caret)
+library(MatchIt)
+library(tableone)
+library(cobalt)
+library(WeightIt)
+```
+
+
+## Load Data
+
+```{r}
+episodes <- read_excel("episodes.xlsx")
+
+
+### making new vars 
+episodes$dem<-ifelse(episodes$p_polity2>6, 1,0)
+
+
+
+
+
+
+
+
+
+### subset datasets 
+
+#episodess <- subset(episodes, intensity_level == 2)
+#episodest<- subset(episodes, type_of_conflict ==3 )
+#peaces<- episodes %>% filter(peace== 1)
+
+#episodes<- subset(episodes, lowac ==0 )
+```
+
+## Prepare Data
+
+### Select Vars 
+```{r}
+### subset the dataset to include only relevant variables
+eps_match <- episodes[, c("time_to_recur_any", "recur_any", "dis", "cease", "govvic", "rebvic", "lowac", 
+                          "pko_u", "log_dur", "cold_war", "log_gdp", "veto_u", "ter_war", "gov_war", 
+                          "p_polity2", "fe_etfra", "log_pop", "al_religion2000", "fe_cultdiv", "W4", 
+                          "ps_original", "conflict_id", "intensity_level", "time_to_recur", "recur_side", "peace", "outcome", "cname", "coal", "polity","dem")]
+
+eps_match <- eps_match[!(eps_match$ter_war == 0 & eps_match$gov_war == 0), ]
+
+### omit missing obs 
+eps_match<-na.omit(eps_match)
+dim(eps_match)
+```
+
+### Matching
+```{r}
+### MatchIt to create a matched dataset
+matchit_model <- matchit(cease ~ log_dur + cold_war + log_gdp + veto_u + fe_etfra + log_pop + al_religion2000+ter_war+W4+dem, 
+                         data = eps_match, 
+                         method = "full",  
+                         distance = "logit")
+#print(summary(matchit_model))
+plot(summary(matchit_model))
+matched_data <- match.data(matchit_model)
+
+
+# Define new custom variable labels
+new.names <- c(
+  distance = "Propensity Score Distance",
+  log_dur = "Log Duration",
+  cold_war = "Cold War",
+  log_gdp = "Log GDP per Capita",
+  veto_u = "Veto Players",
+  dem = "Democracy",
+  fe_etfra = "Ethnic Fractionalization",
+  log_pop = "Log Population",
+  al_religion2000 = "Religious Fractionalization",
+  ter_war= "War over Territory",
+  W4 = "Size of Coalition Forces"
+)
+
+# Generate a love plot from a matchit object
+love.plot(
+  matchit_model,                # The matchit object
+  drop.distance = FALSE,         # Drop propensity score distance if needed
+  var.order = "unadjusted",     # Order variables by unadjusted mean difference
+  abs = TRUE,                   # Use absolute standardized mean differences
+  thresholds = 0.1,             # Threshold line at 0.1
+  var.names = new.names,        # Custom variable labels
+  colors = c("red", "blue"),    # Custom colors
+  shapes = c("triangle filled", "circle filled"),  # Shapes for points
+  sample.names = c("Unweighted", "Matched"),       # Labels for groups
+  #limits = c(0, 0.82),          # Set limits for the x-axis
+  position = c(0.75, 0.25)      # Position of the legend
+) +
+  theme(legend.box.background = element_rect(), 
+        legend.box.margin = margin(1, 1, 1, 1))  # Customize legend theme
+
+bal.tab(matchit_model)
+```
+### Check Balancing
+```{r}
+bal.tab(cease ~ log_dur + cold_war + log_gdp + veto_u + fe_etfra + log_pop + al_religion2000+ter_war+W4+dem,
+                       data = matched_data,  estimand = "ATE", thresholds = c(m = .1))
+```
+
+
+### Add IPW
+```{r}
+###### Obtaining IPW with WeightIt
+ipw_weights <- weightit(cease ~ log_dur + cold_war + log_gdp + veto_u + fe_etfra + log_pop + al_religion2000+ter_war+W4+dem,
+                       data = matched_data, method = "glm", estimand = "ATE")
+matched_data$ipw<-ipw_weights$weights
+
+
+bal.tab(ipw_weights, stats = c("m", "v"), thresholds = c(m = .1))
+
+
+### Plot IPW
+
+# Define new custom variable labels
+new.names <- c(
+  prop.score = "Propensity Score Distance",
+  log_dur = "Log Duration",
+  cold_war = "Cold War",
+  log_gdp = "Log GDP per Capita",
+  veto_u = "Veto Players",
+  dem = "Democracy",
+  fe_etfra = "Ethnic Fractionalization",
+  log_pop = "Log Population",
+  al_religion2000 = "Religious Fractionalization",
+  ter_war= "War over Territory",
+  W4 = "Size of Coalition Forces"
+)
+
+# Generate a love plot from a matchit object
+love.plot(
+  ipw_weights,                # The matchit object
+  drop.distance = FALSE,         # Drop propensity score distance if needed
+  var.order = "unadjusted",     # Order variables by unadjusted mean difference
+  abs = TRUE,                   # Use absolute standardized mean differences
+  thresholds = 0.1,             # Threshold line at 0.1
+  var.names = new.names,        # Custom variable labels
+  colors = c("red", "blue"),    # Custom colors
+  shapes = c("triangle filled", "circle filled"),  # Shapes for points
+  sample.names = c("Unweighted", "Matched"),       # Labels for groups
+  #limits = c(0, 0.82),          # Set limits for the x-axis
+  position = c(0.75, 0.25)      # Position of the legend
+) +
+  theme(legend.box.background = element_rect(), 
+        legend.box.margin = margin(1, 1, 1, 1))  # Customize legend theme
+
+bal.tab(matchit_model)
+
+
+
+
+
+
+
+######## Add propensity scores from MatchIt to matched data
+matched_data$ps<- matched_data$distance
+
+### calculate IPW weights using propensity scores from MatchIt
+matched_data$ipw_ps<- ifelse(
+  matched_data$cease == 1,
+  1 / matched_data$ps,
+  1 / (1 - matched_data$ps)
+)
+```
+
+
+
+### Add Stab IPW
+```{r}
+p_treat <- mean(matched_data$cease == 1)  
+p_control <- 1 - p_treat                   
+matched_data$stab_ipw <- ifelse(matched_data$cease == 1, 
+                                      p_treat / matched_data$distance, 
+                                      p_control / (1 - matched_data$distance))
+summary(matched_data$stab_ipw)
+
+
+
+
+### Inspect the Weight Distribution
+summary(matched_data$stab_ipw)
+hist(matched_data$stab_ipw, breaks = 30, main = "Stabilized Weights Distribution", xlab = "Stabilized Weights")
+
+### Effective Sample Size (ESS)
+ess <- sum(matched_data$stab_ipw)^2 / sum(matched_data$stab_ipw^2)
+print(paste("Effective Sample Size:", round(ess, 2)))
+
+
+### Assess Covariate Balance
+bal.tab(cease ~ log_dur + cold_war + log_gdp + veto_u + fe_etfra + log_pop + al_religion2000 + gov_war + W4 + dem,
+        data = matched_data, weights = matched_data$stab_ipw, stats = c("m", "v"), thresholds = c(m = .1))
+
+### Trimming of Propensity Scores
+#matched_data <- subset(matched_data, propensity_score >= 0.2 & propensity_score <= 0.8)
+
+### Investigate Extreme Weights
+extreme_weights <- matched_data[matched_data$stab_ipw > 10, ]
+print(extreme_weights)
+
+
+### Trim Weights (if Necessary)
+matched_data$stab_ipw <- pmin(matched_data$stab_ipw, 10)
+
+
+
+matched_data$normalized_stab_ipw <- matched_data$stab_ipw / sum(matched_data$stab_ipw)
+sum(matched_data$normalized_stab_ipw) 
+
+### Covariate Balance
+bal.tab(cease ~ log_dur + cold_war + log_gdp + veto_u + fe_etfra + log_pop + al_religion2000 + gov_war + W4 + dem,
+        data = matched_data, weights = matched_data$stab_ipw)
+
+#### Recalculate ESS and assess covariate balance after trim
+ess <- sum(matched_data$stab_ipw)^2 / sum(matched_data$stab_ipw^2)
+print(paste("Effective Sample Size (Trimmed):", round(ess, 2)))
+
+
+bal.tab(cease ~ log_dur + cold_war + log_gdp + veto_u + fe_etfra + log_pop + al_religion2000 + gov_war + W4 + dem,
+        data = matched_data, weights = matched_data$stab_ipw)
+
+
+
+
+
+
+
+
+
+
+
+
+
+### Plot stab_IPW
+
+# Define new custom variable labels
+new.names <- c(
+  distance = "Propensity Score Distance",
+  log_dur = "Log Duration",
+  cold_war = "Cold War",
+  log_gdp = "Log GDP per Capita",
+  veto_u = "Veto Players",
+  dem = "Democracy",
+  fe_etfra = "Ethnic Fractionalization",
+  log_pop = "Log Population",
+  al_religion2000 = "Religious Fractionalization",
+  ter_war = "War over Territory",
+  W4 = "Size of Coalition Forces"
+)
+
+# Generate a love plot for stabilized IPW
+love.plot(
+  cease ~ log_dur + cold_war + log_gdp + veto_u + fe_etfra + log_pop + al_religion2000 + ter_war + W4 + dem,
+  data = matched_data,
+  weights = matched_data$stab_ipw,
+  var.order = "unadjusted",       # Order variables by unadjusted mean difference
+  abs = TRUE,                     # Use absolute standardized mean differences
+  thresholds = 0.1,               # Threshold line at 0.1
+  var.names = new.names,          # Custom variable labels
+  colors = c("red", "blue"),      # Custom colors
+  shapes = c("triangle filled", "circle filled"),  # Shapes for points
+  sample.names = c("Unweighted", "Stabilized IPW"),  # Labels for groups
+  position = c(0.75, 0.25)        # Position of the legend
+) +
+  theme(legend.box.background = element_rect(), 
+        legend.box.margin = margin(1, 1, 1, 1))  # Customize legend theme
+```
+
+
+### Add Ebal
+```{r}
+### Obtain Ebal 
+eb_weights <- weightit(cease ~ log_dur + cold_war + log_gdp + veto_u + fe_etfra + log_pop + al_religion2000+ter_war+W4+dem,
+                       data = matched_data, method = "ebal", estimand = "ATE")
+matched_data$ebal<-eb_weights$weights
+
+
+bal.tab(eb_weights, stats = c("m", "v"), thresholds = c(m = .05))
+
+
+### Plot Ebal 
+
+# Define new custom variable labels
+new.names <- c(
+  distance = "Propensity Score Distance",
+  log_dur = "Log Duration",
+  cold_war = "Cold War",
+  log_gdp = "Log GDP per Capita",
+  veto_u = "Veto Players",
+  dem = "Democracy",
+  fe_etfra = "Ethnic Fractionalization",
+  log_pop = "Log Population",
+  al_religion2000 = "Religious Fractionalization",
+  ter_war= "War over Territory",
+  W4 = "Size of Coalition Forces"
+)
+
+# Generate a love plot from a matchit object
+love.plot(
+  eb_weights,                # The matchit object
+  drop.distance = FALSE,         # Drop propensity score distance if needed
+  var.order = "unadjusted",     # Order variables by unadjusted mean difference
+  abs = TRUE,                   # Use absolute standardized mean differences
+  thresholds = 0.1,             # Threshold line at 0.1
+  var.names = new.names,        # Custom variable labels
+  colors = c("red", "blue"),    # Custom colors
+  shapes = c("triangle filled", "circle filled"),  # Shapes for points
+  sample.names = c("Unweighted", "Matched"),       # Labels for groups
+  #limits = c(0, 0.82),          # Set limits for the x-axis
+  position = c(0.75, 0.25)      # Position of the legend
+) +
+  theme(legend.box.background = element_rect(), 
+        legend.box.margin = margin(1, 1, 1, 1))  # Customize legend theme
+
+bal.tab(matchit_model)
+
+
+
+
+
+
+library(ebal)
+
+# Define treatment and covariates
+treatment <- matched_data$cease
+covariates <- matched_data %>% select(log_dur, cold_war, log_gdp, veto_u, fe_etfra, log_pop, al_religion2000, gov_war, W4, dem)
+
+# Perform entropy balancing
+ebal_weights <- ebalance(Treatment = treatment, X = covariates)
+
+# Add weights to the dataset
+#matched_data$ebal_weights <- ebal_weights$w
+```
+
+
+
+
+
+## Cox with Stab IPW
+
+### Kaplan-Mier
+```{r}
+# Create a new dataframe from episodes
+
+matched_data_KM<- matched_data
+matched_data_KM<-matched_data_KM[, c("outcome", "recur_side", "recur_any", "time_to_recur", "time_to_recur_any", "stab_ipw")]
+matched_data_KM<-na.omit(matched_data_KM)
+
+
+#Convert the numerical outcome variable to a factor with appropriate labels
+matched_data_KM$outcome <- factor(matched_data_KM$outcome, levels = c(1, 2, 3, 4, 5, 6),
+                               labels = c("Peace Agreement", "Ceasefire", "Gov Victory", "Rebel Victory", "Low Activity", "Actor Ceases"))
+
+# Create new variables for time in years
+matched_data_KM$time_to_recur_any_years <- matched_data_KM$time_to_recur_any / 365.25
+matched_data_KM$time_to_recur_years <- matched_data_KM$time_to_recur / 365.25
+
+# Trim follow-up time to 20,000 days (approximately 54.8 years), and create corresponding variables in years
+matched_data_KM$time_to_recur_any_years <- pmin(matched_data_KM$time_to_recur_any_years, 20000 / 365.25)
+matched_data_KM$time_to_recur_years <- pmin(matched_data_KM$time_to_recur_years, 20000 / 365.25)
+
+# Fit the Kaplan-Meier survival curves for first plot (Any Recurrence)
+km_fit_outcome_any <- survfit(Surv(time_to_recur_any_years, recur_any) ~ outcome, data = matched_data_KM, weights = stab_ipw)
+
+# Plot the Kaplan-Meier survival curves with percentages in the risk table (Any Recurrence)
+km_plot_any <- ggsurvplot(km_fit_outcome_any, data = matched_data_KM,
+                          pval = TRUE, conf.int = FALSE,
+                          risk.table = TRUE, risk.table.col = "strata",
+                          risk.table.y.text.col = TRUE, 
+                          risk.table.height = 0.25,
+                          risk.table.title = "Number at Risk",
+                          xlim = c(0, 35),  # Limit x-axis to 35 years
+                          break.time.by = 5,  # Break x-axis every 5 years
+                          ggtheme = theme_classic() +  # Use classic theme
+                                    theme(panel.grid.major = element_line(color = "gray", size = 0.5),  # Add major grid lines
+                                          panel.grid.minor = element_line(color = "lightgray", size = 0.25)),  # Add minor grid lines
+                          palette = c("red", "blue", "green", "purple", "orange", "brown"),
+                          title = "KM Survival Curves for Outcomes (Any Recurrence)",
+                          xlab = "Time (Years)", ylab = "Survival Probability",
+                          tables.theme = theme_classic())  # Use classic theme for the risk table
+
+# Fit the Kaplan-Meier survival curves for the second plot (Side Recurrence)
+km_fit_outcome_side <- survfit(Surv(time_to_recur_years, recur_side) ~ outcome, data = matched_data_KM, weights = stab_ipw)
+
+# Plot the Kaplan-Meier survival curves with percentages in the risk table for the second plot (Side Recurrence)
+km_plot_side <- ggsurvplot(km_fit_outcome_side, data = matched_data_KM,
+                           pval = TRUE, conf.int = FALSE,
+                           risk.table = TRUE, risk.table.col = "strata",
+                           risk.table.y.text.col = TRUE, 
+                           risk.table.height = 0.25,
+                           risk.table.title = "Number at Risk",
+                           xlim = c(0, 35),  # Limit x-axis to 35 years
+                           break.time.by = 5,  # Break x-axis every 5 years
+                           ggtheme = theme_classic() +  # Use classic theme
+                                     theme(panel.grid.major = element_line(color = "gray", size = 0.5),  # Add major grid lines
+                                           panel.grid.minor = element_line(color = "lightgray", size = 0.25)),  # Add minor grid lines
+                           palette = c("red", "blue", "green", "purple", "orange", "brown"),
+                           title = "KM Survival Curves for Outcomes (Side Recurrence)",
+                           xlab = "Time (Years)", ylab = "Survival Probability",
+                           tables.theme = theme_classic())  # Use classic theme for the risk table
+
+# Print plots
+print(km_plot_any)
+print(km_plot_side)
+```
+
+### Cox Models
+```{r}
+# List of variables to include in the correlation matrix
+variables <- c("cease", "dis", "govvic", "rebvic", "lowac", "pko_u", "log_dur", "cold_war", 
+               "log_gdp", "veto_u", "ter_war", "gov_war", "p_polity2", "fe_etfra", 
+               "log_pop", "al_religion2000", "fe_cultdiv", "W4", "ps_original")
+
+# Calculate the correlation matrix
+correlation_matrix <- cor(matched_data[, variables], use = "complete.obs")
+
+# Display the correlation matrix
+#print(correlation_matrix)
+
+
+
+### fit Weighted Cox Model on Matched Data
+m1_m<- coxph(Surv(time_to_recur_any, recur_any) ~ cease + dis + govvic + rebvic + lowac, 
+                        data = matched_data, 
+                        weights = stab_ipw, 
+                        cluster = conflict_id,
+                        robust = TRUE)
+
+m2_m<- coxph(Surv(time_to_recur_any, recur_any) ~ cease + dis + govvic + rebvic + lowac + pko_u + log_dur + cold_war + log_gdp + ter_war + dem + fe_etfra + veto_u + log_pop + al_religion2000 + W4+ps_original, 
+                        data = matched_data, 
+                        weights = stab_ipw, 
+                        cluster = conflict_id,
+                        robust = TRUE)
+
+m3_m<- coxph(Surv(time_to_recur, recur_side) ~ cease + dis + govvic + rebvic + lowac, 
+                        data = matched_data, 
+                        weights = stab_ipw, 
+                        cluster = conflict_id,
+                        robust = TRUE)
+
+m4_m<- coxph(Surv(time_to_recur, recur_side) ~ cease + dis + govvic + rebvic + lowac + pko_u + log_dur + cold_war + log_gdp + ter_war + dem + fe_etfra +veto_u+ log_pop + al_religion2000 + W4+ps_original, 
+                        data = matched_data, 
+                        weights = stab_ipw, 
+                        cluster = conflict_id,
+                        robust = TRUE)
+
+summary(m1_m)
+summary(m2_m)
+summary(m3_m)
+summary(m4_m)
+
+vif(m1_m)
+vif(m2_m)
+vif(m3_m)
+vif(m4_m)
+
+stargazer(m1_m, m2_m, m3_m, m4_m, type = "text")
+
+
+# Load necessary library
+library(stargazer)
+
+# Specify the file path for the Word document
+output_file <- "table_ipw.doc"
+
+# Use stargazer to create the table and save it to the Word document
+stargazer(m1_m, m2_m, m3_m, m4_m,
+          ord.intercepts = TRUE,
+          dep.var.labels = c("UCDP ID-Based War Recurrence", "UCDP ID-Based War Recurrence", "Linkage-Based War Recurrence", "Linkage-Based War Recurrence"),
+          covariate.labels = c("Ceasefire","Actor Ceases",  "Government Victory", "Rebel Victory", "Low Activity", "Peacekeeping Missions", "Log(Duration)", "Cold War", "Log(GDP per Capita)",  "War over Territory", "Democracy", "Ethnic Fractionalization", "Number of Veto Players",  "Log(Population)", "Religious Fractionalization", "Coalition Size","Power-Sharing"), 
+          type = "html",  # Output type for Word compatibility
+          out = output_file)
+```
+
+### Coefficent Plots 
+```{r}
+# Extracting model coefficients and robust standard errors from the summary
+coef_summary <- summary(m2_m)$coefficients
+
+# Rename terms for better readability
+terms_rename <- c(
+  "dis" = "Actor Ceases",
+  "cease" = "Ceasefire",
+  "govvic" = "Government Victory",
+  "rebvic" = "Rebel Victory",
+  "lowac" = "Low Activity",
+  "pko_u" = "Peacekeeping Missions",
+  "log_dur" = "Log(Duration)",
+  "cold_war" = "Cold War",
+  "log_gdp" = "Log(GDP per Capita)",
+  "veto_u" = "Number of Veto Players",
+  "ter_war" = "War over Territory",
+  "dem" = "Democracy",
+  "fe_etfra" = "Ethnic Fractionalization",
+  "W4" = "Coalition Size",
+  "log_pop" = "Log(Population)",
+  "ps_original" = "Power-Sharing",
+  "al_religion2000" = "Religion Fractionalization"
+)
+
+# Create a dataframe for plotting
+df_coef <- data.frame(
+  Term = rownames(coef_summary),
+  Estimate = coef_summary[, "coef"],
+  StdErr = coef_summary[, "robust se"],
+  Lower = coef_summary[, "coef"] - 1.96 * coef_summary[, "robust se"],
+  Upper = coef_summary[, "coef"] + 1.96 * coef_summary[, "robust se"],
+  p_value = coef_summary[, "Pr(>|z|)"]
+)
+
+# Apply the renaming to the Term column
+df_coef$Term <- terms_rename[df_coef$Term]
+
+# Order by Estimate from most negative to most positive
+df_coef <- df_coef[order(df_coef$Estimate), ]
+
+# Plotting using ggplot2
+library(ggplot2)
+coef_ucdp<-ggplot(df_coef, aes(x = Estimate, y = reorder(Term, Estimate))) +
+  geom_point() +
+  geom_errorbarh(aes(xmin = Lower, xmax = Upper), height = 0.2, color = ifelse(df_coef$p_value < 0.05, "blue", "grey")) +
+  theme_minimal() +
+  labs(title = "Coefficient Plot of Cox Model:UCDP",
+       x = "Coefficient Value",
+       y = "Variables")
+
+
+# Extracting model coefficients and robust standard errors from the summary
+coef_summary <- summary(m4_m)$coefficients
+
+# Rename terms for better readability
+terms_rename <- c(
+  "dis" = "Actor Ceases",
+  "cease" = "Ceasefire",
+  "govvic" = "Government Victory",
+  "rebvic" = "Rebel Victory",
+  "lowac" = "Low Activity",
+  "pko_u" = "Peacekeeping Missions",
+  "log_dur" = "Log(Duration)",
+  "cold_war" = "Cold War",
+  "log_gdp" = "Log(GDP per Capita)",
+  "veto_u" = "Number of Veto Players",
+  "ter_war" = "War over Territory",
+  "dem" = "Democracy",
+  "fe_etfra" = "Ethnic Fractionalization",
+  "W4" = "Coalition Size",
+  "log_pop" = "Log(Population)",
+  "ps_original" = "Power-Sharing",
+  "al_religion2000" = "Religion Fractionalization"
+)
+
+# Create a dataframe for plotting
+df_coef <- data.frame(
+  Term = rownames(coef_summary),
+  Estimate = coef_summary[, "coef"],
+  StdErr = coef_summary[, "robust se"],
+  Lower = coef_summary[, "coef"] - 1.96 * coef_summary[, "robust se"],
+  Upper = coef_summary[, "coef"] + 1.96 * coef_summary[, "robust se"],
+  p_value = coef_summary[, "Pr(>|z|)"]
+)
+
+# Apply renaming to the Term column
+df_coef$Term <- terms_rename[df_coef$Term]
+
+# Order by Estimate from most negative to most positive
+df_coef <- df_coef[order(df_coef$Estimate), ]
+
+# Plotting using ggplot2
+library(ggplot2)
+coef_link<-ggplot(df_coef, aes(x = Estimate, y = reorder(Term, Estimate))) +
+  geom_point() +
+  geom_errorbarh(aes(xmin = Lower, xmax = Upper), height = 0.2, color = ifelse(df_coef$p_value < 0.05, "blue", "grey")) +
+  theme_minimal() +
+  labs(title = "Coefficient Plot of Cox Model:Link",
+       x = "Coefficient Value",
+       y = "Variables")
+coef_ucdp
+coef_link
+```
+### Curvs from Cox
+```{r}
+# Define factor levels and labels
+outcome_levels <- c("Peace Agreement", "Ceasefire", "Gov Victory", "Rebel Victory", "Low Activity", "Actor Ceases")
+
+# Convert outcome variable to factor with specified levels in the original dataset
+matched_data$outcomes <- factor(matched_data$outcome, levels = 1:6, labels = outcome_levels)
+
+# Convert the time variables from days to years in the original dataset
+matched_data$time_to_recur_any_years <- matched_data$time_to_recur_any / 365.25
+matched_data$time_to_recur_years <- matched_data$time_to_recur / 365.25
+
+# Fit Cox proportional hazards models with time in years
+m2<- coxph(Surv(time_to_recur_any_years, recur_any) ~ as.factor(outcomes)+ pko_u + log_dur + cold_war + log_gdp + veto_u + ter_war + dem+ fe_etfra + log_pop + al_religion2000 + ps_original+W4, 
+                        data = matched_data, 
+                        weights = stab_ipw, 
+                        cluster = conflict_id)
+
+m4<- coxph(Surv(time_to_recur_years, recur_side) ~ as.factor(outcomes) + pko_u + log_dur + cold_war + log_gdp + veto_u + ter_war +dem + fe_etfra + log_pop + al_religion2000 + ps_original+W4, 
+                        data = matched_data, 
+                        weights = stab_ipw, 
+                        cluster = conflict_id)
+
+# Create representative data without al_language2000
+# Custom function to calculate mode
+mode_stat <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+
+representative_data <- matched_data |>
+  dplyr::summarise(
+    pko_u = mode_stat(pko_u),
+    log_dur = mean(log_dur),
+    cold_war = mode_stat(cold_war),
+    log_gdp = mean(log_gdp),
+    veto_u = mode_stat(veto_u),
+    ter_war = mode_stat(ter_war),
+    dem = mode_stat(dem),
+    fe_etfra = mean(fe_etfra),
+    log_pop = mean(log_pop),
+    ps_original = mode_stat(ps_original),
+    al_religion2000 = mean(al_religion2000),
+    W4 = mean(W4)
+  )
+
+
+# Expand the data to include different outcomes
+expanded_data <- do.call(rbind, replicate(6, representative_data, simplify = FALSE))
+expanded_data$outcomes <- factor(rep(outcome_levels, each = 1), levels = outcome_levels)
+
+# Generate survival curves based on the Cox model for m2
+surv_fits_any <- survfit(m2, newdata = expanded_data)
+
+# Define colors for the plot
+colors <- c("Peace Agreement" = "red", "Ceasefire" = "blue", "Gov Victory" = "green", "Rebel Victory" = "orange", "Low Activity" = "purple", "Actor Ceases" = "cyan")
+
+# Plotting survival curves for Any Recurrence with x-axis in years
+plot_any <- ggsurvplot(
+  surv_fits_any,
+  data = expanded_data,
+  pval = TRUE,  # Show p-value for log-rank test
+  conf.int = FALSE,  # Show confidence intervals
+  xlab = "Time in Years",
+  ylab = "Survival Probability",
+  ggtheme = theme_bw(),
+  xlim = c(0, 30),  # Set the x-axis limit in years (adjust as needed)
+  break.time.by = 5,  # Break x-axis every 5 years
+  risk.table = TRUE,  # Show number at risk table
+  surv.scale = "percent",
+  legend.title = "Outcome",
+  legend.labs = levels(expanded_data$outcomes),  # Automatically use factor labels
+  title = "",
+  subtitle = "",
+  caption = "",
+  palette = colors,
+  size = 1.2,  # Increase line width for better visibility
+  linetype = "solid"  # Set line type to solid for all curves
+)
+
+# Customize the legend font size and axis titles for Any Recurrence plot
+plot_any$plot <- plot_any$plot +
+  theme(legend.text = element_text(size = 12),  # Increase legend text size
+        legend.title = element_text(size = 14),  # Increase legend title size
+        axis.title.x = element_text(size = 10),  # X-axis title size
+        axis.title.y = element_text(size = 10),  # Y-axis title size
+        axis.text.x = element_text(size = 10, angle = 45, hjust = 1),  # X-axis text size and rotation
+        axis.text.y = element_text(size = 10),   # Y-axis text size
+        plot.title = element_text(size = 12))    # Plot title size
+
+# Customize the risk table text for Any Recurrence plot
+plot_any$table <- plot_any$table +
+  scale_x_continuous(breaks = seq(0, 30, by = 5), labels = seq(0, 30, by = 5)) +  # Breaks and labels in years
+  theme(axis.text.x = element_text(size = 10, angle = 45, hjust = 1))  # Rotate risk table text
+
+
+# Generate survival curves based on the Cox model for m4
+surv_fits_side <- survfit(m4, newdata = expanded_data)
+
+# Plotting survival curves for Side Recurrence with x-axis in years
+plot_side <- ggsurvplot(
+  surv_fits_side,
+  data = expanded_data,
+  pval = TRUE,  # Show p-value for log-rank test
+  conf.int = FALSE,  # Show confidence intervals
+  xlab = "Time in Years",
+  ylab = "Survival Probability",
+  ggtheme = theme_bw(),
+  xlim = c(0, 30),  # Set the x-axis limit in years (adjust as needed)
+  break.time.by = 5,  # Break x-axis every 5 years
+  risk.table = TRUE,  # Show number at risk table
+  surv.scale = "percent",
+  legend.title = "Outcome",
+  legend.labs = levels(expanded_data$outcomes),  # Automatically use factor labels
+  title = "",
+  subtitle = "",
+  caption = "",
+  palette = colors,
+  size = 1.2,  # Increase line width for better visibility
+  linetype = "solid"  # Set line type to solid for all curves
+)
+
+# Customize the legend font size and axis titles for Side Recurrence plot
+plot_side$plot <- plot_side$plot +
+  theme(legend.text = element_text(size = 12),  # Increase legend text size
+        legend.title = element_text(size = 14),  # Increase legend title size
+        axis.title.x = element_text(size = 10),  # X-axis title size
+        axis.title.y = element_text(size = 10),  # Y-axis title size
+        axis.text.x = element_text(size = 10, angle = 45, hjust = 1),  # X-axis text size and rotation
+        axis.text.y = element_text(size = 10),   # Y-axis text size
+        plot.title = element_text(size = 12))    # Plot title size
+
+# Customize the risk table text for Side Recurrence plot
+plot_side$table <- plot_side$table +
+  scale_x_continuous(breaks = seq(0, 30, by = 5), labels = seq(0, 30, by = 5)) +  # Breaks and labels in years
+  theme(axis.text.x = element_text(size = 10, angle = 45, hjust = 1))  # Rotate risk table text
+
+# Print the plots
+print(plot_any)
+print(plot_side)
+```
+
+
+## Cox with Ebal 
+
+### Kaplan-Mier
+```{r}
+# Create a new dataframe from episodes
+
+matched_data_KM<- matched_data
+matched_data_KM<-matched_data_KM[, c("outcome", "recur_side", "recur_any", "time_to_recur", "time_to_recur_any", "ebal")]
+matched_data_KM<-na.omit(matched_data_KM)
+
+
+#Convert the numerical outcome variable to a factor with appropriate labels
+matched_data_KM$outcome <- factor(matched_data_KM$outcome, levels = c(1, 2, 3, 4, 5, 6),
+                               labels = c("Peace Agreement", "Ceasefire", "Gov Victory", "Rebel Victory", "Low Activity", "Actor Ceases"))
+
+# Create new variables for time in years
+matched_data_KM$time_to_recur_any_years <- matched_data_KM$time_to_recur_any / 365.25
+matched_data_KM$time_to_recur_years <- matched_data_KM$time_to_recur / 365.25
+
+# Trim follow-up time to 20,000 days (approximately 54.8 years), and create corresponding variables in years
+matched_data_KM$time_to_recur_any_years <- pmin(matched_data_KM$time_to_recur_any_years, 20000 / 365.25)
+matched_data_KM$time_to_recur_years <- pmin(matched_data_KM$time_to_recur_years, 20000 / 365.25)
+
+# Fit the Kaplan-Meier survival curves for first plot (Any Recurrence)
+km_fit_outcome_any <- survfit(Surv(time_to_recur_any_years, recur_any) ~ outcome, data = matched_data_KM, weights = ebal)
+
+# Plot the Kaplan-Meier survival curves with percentages in the risk table (Any Recurrence)
+km_plot_any <- ggsurvplot(km_fit_outcome_any, data = matched_data_KM,
+                          pval = TRUE, conf.int = FALSE,
+                          risk.table = TRUE, risk.table.col = "strata",
+                          risk.table.y.text.col = TRUE, 
+                          risk.table.height = 0.25,
+                          risk.table.title = "Number at Risk",
+                          xlim = c(0, 35),  # Limit x-axis to 35 years
+                          break.time.by = 5,  # Break x-axis every 5 years
+                          ggtheme = theme_classic() +  # Use classic theme
+                                    theme(panel.grid.major = element_line(color = "gray", size = 0.5),  # Add major grid lines
+                                          panel.grid.minor = element_line(color = "lightgray", size = 0.25)),  # Add minor grid lines
+                          palette = c("red", "blue", "green", "purple", "orange", "brown"),
+                          title = "KM Survival Curves for Outcomes (Any Recurrence)",
+                          xlab = "Time (Years)", ylab = "Survival Probability",
+                          tables.theme = theme_classic())  # Use classic theme for the risk table
+
+# Fit the Kaplan-Meier survival curves for the second plot (Side Recurrence)
+km_fit_outcome_side <- survfit(Surv(time_to_recur_years, recur_side) ~ outcome, data = matched_data_KM, weights = ebal)
+
+# Plot the Kaplan-Meier survival curves with percentages in the risk table for the second plot (Side Recurrence)
+km_plot_side <- ggsurvplot(km_fit_outcome_side, data = matched_data_KM,
+                           pval = TRUE, conf.int = FALSE,
+                           risk.table = TRUE, risk.table.col = "strata",
+                           risk.table.y.text.col = TRUE, 
+                           risk.table.height = 0.25,
+                           risk.table.title = "Number at Risk",
+                           xlim = c(0, 35),  # Limit x-axis to 35 years
+                           break.time.by = 5,  # Break x-axis every 5 years
+                           ggtheme = theme_classic() +  # Use classic theme
+                                     theme(panel.grid.major = element_line(color = "gray", size = 0.5),  # Add major grid lines
+                                           panel.grid.minor = element_line(color = "lightgray", size = 0.25)),  # Add minor grid lines
+                           palette = c("red", "blue", "green", "purple", "orange", "brown"),
+                           title = "KM Survival Curves for Outcomes (Side Recurrence)",
+                           xlab = "Time (Years)", ylab = "Survival Probability",
+                           tables.theme = theme_classic())  # Use classic theme for the risk table
+
+# Print plots
+print(km_plot_any)
+print(km_plot_side)
+```
+
+### Cox Models
+```{r}
+# List of variables to include in the correlation matrix
+variables <- c("cease", "dis", "govvic", "rebvic", "lowac", "pko_u", "log_dur", "cold_war", 
+               "log_gdp", "veto_u", "ter_war", "gov_war", "p_polity2", "fe_etfra", 
+               "log_pop", "al_religion2000", "fe_cultdiv", "W4", "ps_original")
+
+# Calculate the correlation matrix
+correlation_matrix <- cor(matched_data[, variables], use = "complete.obs")
+
+# Display the correlation matrix
+#print(correlation_matrix)
+
+
+
+### fit Weighted Cox Model on Matched Data
+m1_m<- coxph(Surv(time_to_recur_any, recur_any) ~ cease + dis + govvic + rebvic + lowac, 
+                        data = matched_data, 
+                        weights = ebal, 
+                        cluster = conflict_id,
+                        robust = TRUE)
+
+m2_m<- coxph(Surv(time_to_recur_any, recur_any) ~ cease + dis + govvic + rebvic + lowac + pko_u + log_dur + cold_war + log_gdp + ter_war + dem + fe_etfra + veto_u + log_pop + al_religion2000 + W4+ps_original, 
+                        data = matched_data, 
+                        weights = ebal, 
+                        cluster = conflict_id,
+                        robust = TRUE)
+
+m3_m<- coxph(Surv(time_to_recur, recur_side) ~ cease + dis + govvic + rebvic + lowac, 
+                        data = matched_data, 
+                        weights = ebal, 
+                        cluster = conflict_id,
+                        robust = TRUE)
+
+m4_m<- coxph(Surv(time_to_recur, recur_side) ~ cease + dis + govvic + rebvic + lowac + pko_u + log_dur + cold_war + log_gdp + ter_war + dem + fe_etfra +veto_u+ log_pop + al_religion2000 + W4+ps_original, 
+                        data = matched_data, 
+                        weights = ebal, 
+                        cluster = conflict_id,
+                        robust = TRUE)
+
+summary(m1_m)
+summary(m2_m)
+summary(m3_m)
+summary(m4_m)
+
+vif(m1_m)
+vif(m2_m)
+vif(m3_m)
+vif(m4_m)
+
+stargazer(m1_m, m2_m, m3_m, m4_m, type = "text")
+
+
+# Load necessary library
+library(stargazer)
+
+# Specify the file path for the Word document
+output_file <- "table_ebal.doc"
+
+# Use stargazer to create the table and save it to the Word document
+stargazer(m1_m, m2_m, m3_m, m4_m,
+          ord.intercepts = TRUE,
+          dep.var.labels = c("UCDP ID-Based War Recurrence", "UCDP ID-Based War Recurrence", "Linkage-Based War Recurrence", "Linkage-Based War Recurrence"),
+          covariate.labels = c("Ceasefire","Actor Ceases",  "Government Victory", "Rebel Victory", "Low Activity", "Peacekeeping Missions", "Log(Duration)", "Cold War", "Log(GDP per Capita)",  "War over Territory", "Democracy", "Ethnic Fractionalization", "Number of Veto Players",  "Log(Population)", "Religious Fractionalization", "Coalition Size","Power-Sharing"), 
+          type = "html",  # Output type for Word compatibility
+          out = output_file)
+```
+
+### Coefficent Plots 
+```{r}
+# Extracting model coefficients and robust standard errors from the summary
+coef_summary <- summary(m2_m)$coefficients
+
+# Rename terms for better readability
+terms_rename <- c(
+  "dis" = "Actor Ceases",
+  "cease" = "Ceasefire",
+  "govvic" = "Government Victory",
+  "rebvic" = "Rebel Victory",
+  "lowac" = "Low Activity",
+  "pko_u" = "Peacekeeping Missions",
+  "log_dur" = "Log(Duration)",
+  "cold_war" = "Cold War",
+  "log_gdp" = "Log(GDP per Capita)",
+  "veto_u" = "Number of Veto Players",
+  "ter_war" = "War over Territory",
+  "dem" = "Democracy",
+  "fe_etfra" = "Ethnic Fractionalization",
+  "W4" = "Coalition Size",
+  "log_pop" = "Log(Population)",
+  "ps_original" = "Power-Sharing",
+  "al_religion2000" = "Religion Fractionalization"
+)
+
+# Create a dataframe for plotting
+df_coef <- data.frame(
+  Term = rownames(coef_summary),
+  Estimate = coef_summary[, "coef"],
+  StdErr = coef_summary[, "robust se"],
+  Lower = coef_summary[, "coef"] - 1.96 * coef_summary[, "robust se"],
+  Upper = coef_summary[, "coef"] + 1.96 * coef_summary[, "robust se"],
+  p_value = coef_summary[, "Pr(>|z|)"]
+)
+
+# Apply the renaming to the Term column
+df_coef$Term <- terms_rename[df_coef$Term]
+
+# Order by Estimate from most negative to most positive
+df_coef <- df_coef[order(df_coef$Estimate), ]
+
+# Plotting using ggplot2
+library(ggplot2)
+coef_ucdp<-ggplot(df_coef, aes(x = Estimate, y = reorder(Term, Estimate))) +
+  geom_point() +
+  geom_errorbarh(aes(xmin = Lower, xmax = Upper), height = 0.2, color = ifelse(df_coef$p_value < 0.05, "blue", "grey")) +
+  theme_minimal() +
+  labs(title = "Coefficient Plot of Cox Model:UCDP",
+       x = "Coefficient Value",
+       y = "Variables")
+
+
+# Extracting model coefficients and robust standard errors from the summary
+coef_summary <- summary(m4_m)$coefficients
+
+# Rename terms for better readability
+terms_rename <- c(
+  "dis" = "Actor Ceases",
+  "cease" = "Ceasefire",
+  "govvic" = "Government Victory",
+  "rebvic" = "Rebel Victory",
+  "lowac" = "Low Activity",
+  "pko_u" = "Peacekeeping Missions",
+  "log_dur" = "Log(Duration)",
+  "cold_war" = "Cold War",
+  "log_gdp" = "Log(GDP per Capita)",
+  "veto_u" = "Number of Veto Players",
+  "ter_war" = "War over Territory",
+  "dem" = "Democracy",
+  "fe_etfra" = "Ethnic Fractionalization",
+  "W4" = "Coalition Size",
+  "log_pop" = "Log(Population)",
+  "ps_original" = "Power-Sharing",
+  "al_religion2000" = "Religion Fractionalization"
+)
+
+# Create a dataframe for plotting
+df_coef <- data.frame(
+  Term = rownames(coef_summary),
+  Estimate = coef_summary[, "coef"],
+  StdErr = coef_summary[, "robust se"],
+  Lower = coef_summary[, "coef"] - 1.96 * coef_summary[, "robust se"],
+  Upper = coef_summary[, "coef"] + 1.96 * coef_summary[, "robust se"],
+  p_value = coef_summary[, "Pr(>|z|)"]
+)
+
+# Apply renaming to the Term column
+df_coef$Term <- terms_rename[df_coef$Term]
+
+# Order by Estimate from most negative to most positive
+df_coef <- df_coef[order(df_coef$Estimate), ]
+
+# Plotting using ggplot2
+library(ggplot2)
+coef_link<-ggplot(df_coef, aes(x = Estimate, y = reorder(Term, Estimate))) +
+  geom_point() +
+  geom_errorbarh(aes(xmin = Lower, xmax = Upper), height = 0.2, color = ifelse(df_coef$p_value < 0.05, "blue", "grey")) +
+  theme_minimal() +
+  labs(title = "Coefficient Plot of Cox Model:Link",
+       x = "Coefficient Value",
+       y = "Variables")
+coef_ucdp
+coef_link
+```
+### Curvs from Cox
+```{r}
+# Define factor levels and labels
+outcome_levels <- c("Peace Agreement", "Ceasefire", "Gov Victory", "Rebel Victory", "Low Activity", "Actor Ceases")
+
+# Convert outcome variable to factor with specified levels in the original dataset
+matched_data$outcomes <- factor(matched_data$outcome, levels = 1:6, labels = outcome_levels)
+
+# Convert the time variables from days to years in the original dataset
+matched_data$time_to_recur_any_years <- matched_data$time_to_recur_any / 365.25
+matched_data$time_to_recur_years <- matched_data$time_to_recur / 365.25
+
+# Fit Cox proportional hazards models with time in years
+m2<- coxph(Surv(time_to_recur_any_years, recur_any) ~ as.factor(outcomes)+ pko_u + log_dur + cold_war + log_gdp + veto_u + ter_war + dem+ fe_etfra + log_pop + al_religion2000 + ps_original+W4, 
+                        data = matched_data, 
+                        weights = ebal, 
+                        cluster = conflict_id)
+
+m4<- coxph(Surv(time_to_recur_years, recur_side) ~ as.factor(outcomes) + pko_u + log_dur + cold_war + log_gdp + veto_u + ter_war +dem + fe_etfra + log_pop + al_religion2000 + ps_original+W4, 
+                        data = matched_data, 
+                        weights = ebal, 
+                        cluster = conflict_id)
+
+# Create representative data without al_language2000
+# Custom function to calculate mode
+mode_stat <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+
+representative_data <- matched_data |>
+  dplyr::summarise(
+    pko_u = mode_stat(pko_u),
+    log_dur = mean(log_dur),
+    cold_war = mode_stat(cold_war),
+    log_gdp = mean(log_gdp),
+    veto_u = mode_stat(veto_u),
+    ter_war = mode_stat(ter_war),
+    dem = mode_stat(dem),
+    fe_etfra = mean(fe_etfra),
+    log_pop = mean(log_pop),
+    ps_original = mode_stat(ps_original),
+    al_religion2000 = mean(al_religion2000),
+    W4 = mean(W4)
+  )
+
+
+# Expand the data to include different outcomes
+expanded_data <- do.call(rbind, replicate(6, representative_data, simplify = FALSE))
+expanded_data$outcomes <- factor(rep(outcome_levels, each = 1), levels = outcome_levels)
+
+# Generate survival curves based on the Cox model for m2
+surv_fits_any <- survfit(m2, newdata = expanded_data)
+
+# Define colors for the plot
+colors <- c("Peace Agreement" = "red", "Ceasefire" = "blue", "Gov Victory" = "green", "Rebel Victory" = "orange", "Low Activity" = "purple", "Actor Ceases" = "cyan")
+
+# Plotting survival curves for Any Recurrence with x-axis in years
+plot_any <- ggsurvplot(
+  surv_fits_any,
+  data = expanded_data,
+  pval = TRUE,  # Show p-value for log-rank test
+  conf.int = FALSE,  # Show confidence intervals
+  xlab = "Time in Years",
+  ylab = "Survival Probability",
+  ggtheme = theme_bw(),
+  xlim = c(0, 30),  # Set the x-axis limit in years (adjust as needed)
+  break.time.by = 5,  # Break x-axis every 5 years
+  risk.table = TRUE,  # Show number at risk table
+  surv.scale = "percent",
+  legend.title = "Outcome",
+  legend.labs = levels(expanded_data$outcomes),  # Automatically use factor labels
+  title = "Survival Probability Over Time for War Recurrence Based on ACD Conflict ID",
+  subtitle = "",
+  caption = "",
+  palette = colors,
+  size = 1.2,  # Increase line width for better visibility
+  linetype = "solid"  # Set line type to solid for all curves
+)
+
+# Customize the legend font size and axis titles for Any Recurrence plot
+plot_any$plot <- plot_any$plot +
+  theme(legend.text = element_text(size = 12),  # Increase legend text size
+        legend.title = element_text(size = 14),  # Increase legend title size
+        axis.title.x = element_text(size = 10),  # X-axis title size
+        axis.title.y = element_text(size = 10),  # Y-axis title size
+        axis.text.x = element_text(size = 10, angle = 45, hjust = 1),  # X-axis text size and rotation
+        axis.text.y = element_text(size = 10),   # Y-axis text size
+        plot.title = element_text(size = 12))    # Plot title size
+
+# Customize the risk table text for Any Recurrence plot
+plot_any$table <- plot_any$table +
+  scale_x_continuous(breaks = seq(0, 30, by = 5), labels = seq(0, 30, by = 5)) +  # Breaks and labels in years
+  theme(axis.text.x = element_text(size = 10, angle = 45, hjust = 1))  # Rotate risk table text
+
+
+# Generate survival curves based on the Cox model for m4
+surv_fits_side <- survfit(m4, newdata = expanded_data)
+
+# Plotting survival curves for Side Recurrence with x-axis in years
+plot_side <- ggsurvplot(
+  surv_fits_side,
+  data = expanded_data,
+  pval = TRUE,  # Show p-value for log-rank test
+  conf.int = FALSE,  # Show confidence intervals
+  xlab = "Time in Years",
+  ylab = "Survival Probability",
+  ggtheme = theme_bw(),
+  xlim = c(0, 30),  # Set the x-axis limit in years (adjust as needed)
+  break.time.by = 5,  # Break x-axis every 5 years
+  risk.table = TRUE,  # Show number at risk table
+  surv.scale = "percent",
+  legend.title = "Outcome",
+  legend.labs = levels(expanded_data$outcomes),  # Automatically use factor labels
+  title = "Survival Probability Over Time for War Recurrence Based on Sufficient Link",
+  subtitle = "",
+  caption = "",
+  palette = colors,
+  size = 1.2,  # Increase line width for better visibility
+  linetype = "solid"  # Set line type to solid for all curves
+)
+
+# Customize the legend font size and axis titles for Side Recurrence plot
+plot_side$plot <- plot_side$plot +
+  theme(legend.text = element_text(size = 12),  # Increase legend text size
+        legend.title = element_text(size = 14),  # Increase legend title size
+        axis.title.x = element_text(size = 10),  # X-axis title size
+        axis.title.y = element_text(size = 10),  # Y-axis title size
+        axis.text.x = element_text(size = 10, angle = 45, hjust = 1),  # X-axis text size and rotation
+        axis.text.y = element_text(size = 10),   # Y-axis text size
+        plot.title = element_text(size = 12))    # Plot title size
+
+# Customize the risk table text for Side Recurrence plot
+plot_side$table <- plot_side$table +
+  scale_x_continuous(breaks = seq(0, 30, by = 5), labels = seq(0, 30, by = 5)) +  # Breaks and labels in years
+  theme(axis.text.x = element_text(size = 10, angle = 45, hjust = 1))  # Rotate risk table text
+
+# Print the plots
+print(plot_any)
+print(plot_side)
+```
+
+
+## Cox without
+
+### Kaplan-Mier
+```{r}
+# Create a new dataframe from episodes
+
+matched_data_KM<- matched_data
+matched_data_KM<-matched_data_KM[, c("outcome", "recur_side", "recur_any", "time_to_recur", "time_to_recur_any")]
+matched_data_KM<-na.omit(matched_data_KM)
+
+
+#Convert the numerical outcome variable to a factor with appropriate labels
+matched_data_KM$outcome <- factor(matched_data_KM$outcome, levels = c(1, 2, 3, 4, 5, 6),
+                               labels = c("Peace Agreement", "Ceasefire", "Gov Victory", "Rebel Victory", "Low Activity", "Actor Ceases"))
+
+# Create new variables for time in years
+matched_data_KM$time_to_recur_any_years <- matched_data_KM$time_to_recur_any / 365.25
+matched_data_KM$time_to_recur_years <- matched_data_KM$time_to_recur / 365.25
+
+# Trim follow-up time to 20,000 days (approximately 54.8 years), and create corresponding variables in years
+matched_data_KM$time_to_recur_any_years <- pmin(matched_data_KM$time_to_recur_any_years, 20000 / 365.25)
+matched_data_KM$time_to_recur_years <- pmin(matched_data_KM$time_to_recur_years, 20000 / 365.25)
+
+# Fit the Kaplan-Meier survival curves for first plot (Any Recurrence)
+km_fit_outcome_any <- survfit(Surv(time_to_recur_any_years, recur_any) ~ outcome, data = matched_data_KM)
+
+# Plot the Kaplan-Meier survival curves with percentages in the risk table (Any Recurrence)
+km_plot_any <- ggsurvplot(km_fit_outcome_any, data = matched_data_KM,
+                          pval = TRUE, conf.int = FALSE,
+                          risk.table = TRUE, risk.table.col = "strata",
+                          risk.table.y.text.col = TRUE, 
+                          risk.table.height = 0.25,
+                          risk.table.title = "Number at Risk",
+                          xlim = c(0, 35),  # Limit x-axis to 35 years
+                          break.time.by = 5,  # Break x-axis every 5 years
+                          ggtheme = theme_classic() +  # Use classic theme
+                                    theme(panel.grid.major = element_line(color = "gray", size = 0.5),  # Add major grid lines
+                                          panel.grid.minor = element_line(color = "lightgray", size = 0.25)),  # Add minor grid lines
+                          palette = c("red", "blue", "green", "purple", "orange", "brown"),
+                          title = "KM Survival Curves for Outcomes (Any Recurrence)",
+                          xlab = "Time (Years)", ylab = "Survival Probability",
+                          tables.theme = theme_classic())  # Use classic theme for the risk table
+
+# Fit the Kaplan-Meier survival curves for the second plot (Side Recurrence)
+km_fit_outcome_side <- survfit(Surv(time_to_recur_years, recur_side) ~ outcome, data = matched_data_KM)
+
+# Plot the Kaplan-Meier survival curves with percentages in the risk table for the second plot (Side Recurrence)
+km_plot_side <- ggsurvplot(km_fit_outcome_side, data = matched_data_KM,
+                           pval = TRUE, conf.int = FALSE,
+                           risk.table = TRUE, risk.table.col = "strata",
+                           risk.table.y.text.col = TRUE, 
+                           risk.table.height = 0.25,
+                           risk.table.title = "Number at Risk",
+                           xlim = c(0, 35),  # Limit x-axis to 35 years
+                           break.time.by = 5,  # Break x-axis every 5 years
+                           ggtheme = theme_classic() +  # Use classic theme
+                                     theme(panel.grid.major = element_line(color = "gray", size = 0.5),  # Add major grid lines
+                                           panel.grid.minor = element_line(color = "lightgray", size = 0.25)),  # Add minor grid lines
+                           palette = c("red", "blue", "green", "purple", "orange", "brown"),
+                           title = "KM Survival Curves for Outcomes (Side Recurrence)",
+                           xlab = "Time (Years)", ylab = "Survival Probability",
+                           tables.theme = theme_classic())  # Use classic theme for the risk table
+
+# Print plots
+print(km_plot_any)
+print(km_plot_side)
+```
+
+### Cox Models
+```{r}
+# List of variables to include in the correlation matrix
+variables <- c("cease", "dis", "govvic", "rebvic", "lowac", "pko_u", "log_dur", "cold_war", 
+               "log_gdp", "veto_u", "ter_war", "gov_war", "p_polity2", "fe_etfra", 
+               "log_pop", "al_religion2000", "fe_cultdiv", "W4", "ps_original")
+
+# Calculate the correlation matrix
+correlation_matrix <- cor(matched_data[, variables], use = "complete.obs")
+
+# Display the correlation matrix
+#print(correlation_matrix)
+
+
+
+### fit Weighted Cox Model on Matched Data
+m1_m<- coxph(Surv(time_to_recur_any, recur_any) ~ cease + dis + govvic + rebvic + lowac, 
+                        data = matched_data, 
+                        cluster = conflict_id,
+                        robust = TRUE)
+
+m2_m<- coxph(Surv(time_to_recur_any, recur_any) ~ cease + dis + govvic + rebvic + lowac + pko_u + log_dur + cold_war + log_gdp + ter_war + dem + fe_etfra + veto_u + log_pop + al_religion2000 + W4+ps_original, 
+                        data = matched_data, 
+                        cluster = conflict_id,
+                        robust = TRUE)
+
+m3_m<- coxph(Surv(time_to_recur, recur_side) ~ cease + dis + govvic + rebvic + lowac, 
+                        data = matched_data, 
+                        cluster = conflict_id,
+                        robust = TRUE)
+
+m4_m<- coxph(Surv(time_to_recur, recur_side) ~ cease + dis + govvic + rebvic + lowac + pko_u + log_dur + cold_war + log_gdp + ter_war + dem + fe_etfra +veto_u+ log_pop + al_religion2000 + W4+ps_original, 
+                        data = matched_data, 
+                        cluster = conflict_id,
+                        robust = TRUE)
+
+summary(m1_m)
+summary(m2_m)
+summary(m3_m)
+summary(m4_m)
+
+vif(m1_m)
+vif(m2_m)
+vif(m3_m)
+vif(m4_m)
+
+stargazer(m1_m, m2_m, m3_m, m4_m, type = "text")
+
+
+# Load necessary library
+library(stargazer)
+
+# Specify the file path for the Word document
+output_file <- "table_no.doc"
+
+# Use stargazer to create the table and save it to the Word document
+stargazer(m1_m, m2_m, m3_m, m4_m,
+          ord.intercepts = TRUE,
+          dep.var.labels = c("UCDP ID-Based War Recurrence", "UCDP ID-Based War Recurrence", "Linkage-Based War Recurrence", "Linkage-Based War Recurrence"),
+          covariate.labels = c("Ceasefire","Actor Ceases",  "Government Victory", "Rebel Victory", "Low Activity", "Peacekeeping Missions", "Log(Duration)", "Cold War", "Log(GDP per Capita)",  "War over Territory", "Democracy", "Ethnic Fractionalization", "Number of Veto Players",  "Log(Population)", "Religious Fractionalization", "Coalition Size","Power-Sharing"), 
+          type = "html",  # Output type for Word compatibility
+          out = output_file)
+```
+
+### Coefficent Plots 
+```{r}
+# Extracting model coefficients and robust standard errors from the summary
+coef_summary <- summary(m2_m)$coefficients
+
+# Rename terms for better readability
+terms_rename <- c(
+  "dis" = "Actor Ceases",
+  "cease" = "Ceasefire",
+  "govvic" = "Government Victory",
+  "rebvic" = "Rebel Victory",
+  "lowac" = "Low Activity",
+  "pko_u" = "Peacekeeping Missions",
+  "log_dur" = "Log(Duration)",
+  "cold_war" = "Cold War",
+  "log_gdp" = "Log(GDP per Capita)",
+  "veto_u" = "Number of Veto Players",
+  "ter_war" = "War over Territory",
+  "dem" = "Democracy",
+  "fe_etfra" = "Ethnic Fractionalization",
+  "W4" = "Coalition Size",
+  "log_pop" = "Log(Population)",
+  "ps_original" = "Power-Sharing",
+  "al_religion2000" = "Religion Fractionalization"
+)
+
+# Create a dataframe for plotting
+df_coef <- data.frame(
+  Term = rownames(coef_summary),
+  Estimate = coef_summary[, "coef"],
+  StdErr = coef_summary[, "robust se"],
+  Lower = coef_summary[, "coef"] - 1.96 * coef_summary[, "robust se"],
+  Upper = coef_summary[, "coef"] + 1.96 * coef_summary[, "robust se"],
+  p_value = coef_summary[, "Pr(>|z|)"]
+)
+
+# Apply the renaming to the Term column
+df_coef$Term <- terms_rename[df_coef$Term]
+
+# Order by Estimate from most negative to most positive
+df_coef <- df_coef[order(df_coef$Estimate), ]
+
+# Plotting using ggplot2
+library(ggplot2)
+coef_ucdp<-ggplot(df_coef, aes(x = Estimate, y = reorder(Term, Estimate))) +
+  geom_point() +
+  geom_errorbarh(aes(xmin = Lower, xmax = Upper), height = 0.2, color = ifelse(df_coef$p_value < 0.05, "blue", "grey")) +
+  theme_minimal() +
+  labs(title = "Coefficient Plot of Cox Model:UCDP",
+       x = "Coefficient Value",
+       y = "Variables")
+
+
+# Extracting model coefficients and robust standard errors from the summary
+coef_summary <- summary(m4_m)$coefficients
+
+# Rename terms for better readability
+terms_rename <- c(
+  "dis" = "Actor Ceases",
+  "cease" = "Ceasefire",
+  "govvic" = "Government Victory",
+  "rebvic" = "Rebel Victory",
+  "lowac" = "Low Activity",
+  "pko_u" = "Peacekeeping Missions",
+  "log_dur" = "Log(Duration)",
+  "cold_war" = "Cold War",
+  "log_gdp" = "Log(GDP per Capita)",
+  "veto_u" = "Number of Veto Players",
+  "ter_war" = "War over Territory",
+  "dem" = "Democracy",
+  "fe_etfra" = "Ethnic Fractionalization",
+  "W4" = "Coalition Size",
+  "log_pop" = "Log(Population)",
+  "ps_original" = "Power-Sharing",
+  "al_religion2000" = "Religion Fractionalization"
+)
+
+# Create a dataframe for plotting
+df_coef <- data.frame(
+  Term = rownames(coef_summary),
+  Estimate = coef_summary[, "coef"],
+  StdErr = coef_summary[, "robust se"],
+  Lower = coef_summary[, "coef"] - 1.96 * coef_summary[, "robust se"],
+  Upper = coef_summary[, "coef"] + 1.96 * coef_summary[, "robust se"],
+  p_value = coef_summary[, "Pr(>|z|)"]
+)
+
+# Apply renaming to the Term column
+df_coef$Term <- terms_rename[df_coef$Term]
+
+# Order by Estimate from most negative to most positive
+df_coef <- df_coef[order(df_coef$Estimate), ]
+
+# Plotting using ggplot2
+library(ggplot2)
+coef_link<-ggplot(df_coef, aes(x = Estimate, y = reorder(Term, Estimate))) +
+  geom_point() +
+  geom_errorbarh(aes(xmin = Lower, xmax = Upper), height = 0.2, color = ifelse(df_coef$p_value < 0.05, "blue", "grey")) +
+  theme_minimal() +
+  labs(title = "Coefficient Plot of Cox Model:Link",
+       x = "Coefficient Value",
+       y = "Variables")
+coef_ucdp
+coef_link
+```
+
+
+
+### Curvs from Cox
+```{r}
+# Define factor levels and labels
+outcome_levels <- c("Peace Agreement", "Ceasefire", "Gov Victory", "Rebel Victory", "Low Activity", "Actor Ceases")
+
+# Convert outcome variable to factor with specified levels in the original dataset
+matched_data$outcomes <- factor(matched_data$outcome, levels = 1:6, labels = outcome_levels)
+
+# Convert the time variables from days to years in the original dataset
+matched_data$time_to_recur_any_years <- matched_data$time_to_recur_any / 365.25
+matched_data$time_to_recur_years <- matched_data$time_to_recur / 365.25
+
+# Fit Cox proportional hazards models with time in years
+m2<- coxph(Surv(time_to_recur_any_years, recur_any) ~ as.factor(outcomes)+ pko_u + log_dur + cold_war + log_gdp + veto_u + ter_war + dem+ fe_etfra + log_pop + al_religion2000 + ps_original+W4, 
+                        data = matched_data, 
+                        cluster = conflict_id)
+
+m4<- coxph(Surv(time_to_recur_years, recur_side) ~ as.factor(outcomes) + pko_u + log_dur + cold_war + log_gdp + veto_u + ter_war +dem + fe_etfra + log_pop + al_religion2000 + ps_original+W4, 
+                        data = matched_data, 
+                        cluster = conflict_id)
+
+# Create representative data without al_language2000
+# Custom function to calculate mode
+mode_stat <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+
+representative_data <- matched_data |>
+  dplyr::summarise(
+    pko_u = mode_stat(pko_u),
+    log_dur = mean(log_dur),
+    cold_war = mode_stat(cold_war),
+    log_gdp = mean(log_gdp),
+    veto_u = mode_stat(veto_u),
+    ter_war = mode_stat(ter_war),
+    dem = mode_stat(dem),
+    fe_etfra = mean(fe_etfra),
+    log_pop = mean(log_pop),
+    ps_original = mode_stat(ps_original),
+    al_religion2000 = mean(al_religion2000),
+    W4 = mean(W4)
+  )
+
+
+# Expand the data to include different outcomes
+expanded_data <- do.call(rbind, replicate(6, representative_data, simplify = FALSE))
+expanded_data$outcomes <- factor(rep(outcome_levels, each = 1), levels = outcome_levels)
+
+# Generate survival curves based on the Cox model for m2
+surv_fits_any <- survfit(m2, newdata = expanded_data)
+
+# Define colors for the plot
+colors <- c("Peace Agreement" = "red", "Ceasefire" = "blue", "Gov Victory" = "green", "Rebel Victory" = "orange", "Low Activity" = "purple", "Actor Ceases" = "cyan")
+
+# Plotting survival curves for Any Recurrence with x-axis in years
+plot_any <- ggsurvplot(
+  surv_fits_any,
+  data = expanded_data,
+  pval = TRUE,  # Show p-value for log-rank test
+  conf.int = FALSE,  # Show confidence intervals
+  xlab = "Time in Years",
+  ylab = "Survival Probability",
+  ggtheme = theme_bw(),
+  xlim = c(0, 30),  # Set the x-axis limit in years (adjust as needed)
+  break.time.by = 5,  # Break x-axis every 5 years
+  risk.table = TRUE,  # Show number at risk table
+  surv.scale = "percent",
+  legend.title = "Outcome",
+  legend.labs = levels(expanded_data$outcomes),  # Automatically use factor labels
+  title = "Survival Probability Over Time for War Recurrence Based on ACD Conflict ID",
+  subtitle = "",
+  caption = "",
+  palette = colors,
+  size = 1.2,  # Increase line width for better visibility
+  linetype = "solid"  # Set line type to solid for all curves
+)
+
+# Customize the legend font size and axis titles for Any Recurrence plot
+plot_any$plot <- plot_any$plot +
+  theme(legend.text = element_text(size = 12),  # Increase legend text size
+        legend.title = element_text(size = 14),  # Increase legend title size
+        axis.title.x = element_text(size = 10),  # X-axis title size
+        axis.title.y = element_text(size = 10),  # Y-axis title size
+        axis.text.x = element_text(size = 10, angle = 45, hjust = 1),  # X-axis text size and rotation
+        axis.text.y = element_text(size = 10),   # Y-axis text size
+        plot.title = element_text(size = 12))    # Plot title size
+
+# Customize the risk table text for Any Recurrence plot
+plot_any$table <- plot_any$table +
+  scale_x_continuous(breaks = seq(0, 30, by = 5), labels = seq(0, 30, by = 5)) +  # Breaks and labels in years
+  theme(axis.text.x = element_text(size = 10, angle = 45, hjust = 1))  # Rotate risk table text
+
+
+# Generate survival curves based on the Cox model for m4
+surv_fits_side <- survfit(m4, newdata = expanded_data)
+
+# Plotting survival curves for Side Recurrence with x-axis in years
+plot_side <- ggsurvplot(
+  surv_fits_side,
+  data = expanded_data,
+  pval = TRUE,  # Show p-value for log-rank test
+  conf.int = FALSE,  # Show confidence intervals
+  xlab = "Time in Years",
+  ylab = "Survival Probability",
+  ggtheme = theme_bw(),
+  xlim = c(0, 30),  # Set the x-axis limit in years (adjust as needed)
+  break.time.by = 5,  # Break x-axis every 5 years
+  risk.table = TRUE,  # Show number at risk table
+  surv.scale = "percent",
+  legend.title = "Outcome",
+  legend.labs = levels(expanded_data$outcomes),  # Automatically use factor labels
+  title = "Survival Probability Over Time for War Recurrence Based on Sufficient Link",
+  subtitle = "",
+  caption = "",
+  palette = colors,
+  size = 1.2,  # Increase line width for better visibility
+  linetype = "solid"  # Set line type to solid for all curves
+)
+
+# Customize the legend font size and axis titles for Side Recurrence plot
+plot_side$plot <- plot_side$plot +
+  theme(legend.text = element_text(size = 12),  # Increase legend text size
+        legend.title = element_text(size = 14),  # Increase legend title size
+        axis.title.x = element_text(size = 10),  # X-axis title size
+        axis.title.y = element_text(size = 10),  # Y-axis title size
+        axis.text.x = element_text(size = 10, angle = 45, hjust = 1),  # X-axis text size and rotation
+        axis.text.y = element_text(size = 10),   # Y-axis text size
+        plot.title = element_text(size = 12))    # Plot title size
+
+# Customize the risk table text for Side Recurrence plot
+plot_side$table <- plot_side$table +
+  scale_x_continuous(breaks = seq(0, 30, by = 5), labels = seq(0, 30, by = 5)) +  # Breaks and labels in years
+  theme(axis.text.x = element_text(size = 10, angle = 45, hjust = 1))  # Rotate risk table text
+
+# Print the plots
+print(plot_any)
+print(plot_side)
+```
+
+
+## RSF
+
+### RSF with Stab IPW
+```{r}
+# Load required libraries
+library(randomForestSRC)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# Subsetting and cleaning data
+X <- matched_data %>%
+  select(time_to_recur_any, recur_any, dis, cease, govvic, rebvic, lowac, peace, W4, pko_u, log_dur, 
+         cold_war, p_polity2, fe_etfra, log_gdp, log_pop, ps_original, 
+         al_religion2000, veto_u, ter_war, stab_ipw, conflict_id) %>%
+  na.omit() %>%
+  mutate(across(everything(), as.numeric))
+
+# Convert time to years
+X$time_to_recur_any<- X$time_to_recur_any / 365.25
+
+# Train Random Survival Forest model on the entire dataset
+fit <- rfsrc(
+  Surv(time_to_recur_any, recur_any) ~ ., 
+  data = X %>% select(-stab_ipw, -conflict_id),  # Exclude weights and cluster IDs from predictors
+  ntree = 1000, 
+  nodesize = 5, 
+  nsplit = 50,
+  case.wt = X$stab_ipw,  # Include stabilized weights
+  block.size = 1,  # Recommended for clustering
+  cluster = X$conflict_id  # Cluster by conflict_id
+)
+
+# Predict survival probabilities for the entire dataset
+pred <- predict(fit, X %>% select(-stab_ipw, -conflict_id), type = "response")
+survival_probs <- as.data.frame(pred$survival)
+
+# Extract time points (already in years)
+time_points <- fit$time.interest
+colnames(survival_probs) <- paste("Time", round(time_points, 2), sep = "_")
+survival_probs$id <- 1:nrow(survival_probs)
+X$id <- 1:nrow(X)
+
+# Convert survival probabilities to long format for plotting
+survival_probs_long <- survival_probs %>%
+  pivot_longer(cols = -id, names_to = "Time", values_to = "Probability") %>%
+  mutate(Time = as.numeric(gsub("Time_", "", Time)))
+
+# Combine with the original data to match IDs
+survival_probs_long <- left_join(survival_probs_long, X, by = "id")
+
+# Filter data to include only the first 35 years
+survival_probs_long <- survival_probs_long %>%
+  filter(Time <= 35)
+
+# Function to calculate mean probabilities
+calculate_summary <- function(data) {
+  data %>%
+    group_by(Time) %>%
+    summarise(
+      Mean_Probability = mean(Probability, na.rm = TRUE)
+    )
+}
+
+# Calculate summary statistics for each binary outcome variable
+dis_summary <- calculate_summary(filter(survival_probs_long, dis == 1))
+cease_summary <- calculate_summary(filter(survival_probs_long, cease == 1))
+govvic_summary <- calculate_summary(filter(survival_probs_long, govvic == 1))
+rebvic_summary <- calculate_summary(filter(survival_probs_long, rebvic == 1))
+lowac_summary <- calculate_summary(filter(survival_probs_long, lowac == 1))
+peace_summary <- calculate_summary(filter(survival_probs_long, peace == 1))
+
+# Plot using ggplot2, one line per variable of interest, restricted to 35 years
+ggplot() +
+  geom_line(data = dis_summary, aes(x = Time, y = Mean_Probability, color = "Disappearance"), linewidth=.8) +
+  geom_line(data = cease_summary, aes(x = Time, y = Mean_Probability, color = "Ceasefire"),linewidth=.8) +
+  geom_line(data = govvic_summary, aes(x = Time, y = Mean_Probability, color = "Government Victory"),linewidth=.8) +
+  geom_line(data = rebvic_summary, aes(x = Time, y = Mean_Probability, color = "Rebel Victory"),linewidth=.8) +
+  geom_line(data = lowac_summary, aes(x = Time, y = Mean_Probability, color = "Low Activity"),linewidth=.8) +
+  geom_line(data = peace_summary, aes(x = Time, y = Mean_Probability, color = "Peace Agreement"),linewidth=.8) +
+  scale_x_continuous(breaks = seq(0, 35, by = 5)) +  # Set breaks every 5 years up to 35
+  labs(
+    title = "",
+    x = "Time (Years)",
+    y = "Survival Probability",
+    color = "Variable"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+
+
+
+
+
+
+
+
+
+
+
+
+######### Recur_side
+
+# Subsetting and cleaning data
+X <- matched_data %>%
+  select(time_to_recur, recur_side, dis, cease, govvic, rebvic, lowac, peace, W4, pko_u, log_dur, 
+         cold_war, p_polity2, fe_etfra, log_gdp, log_pop, ps_original, 
+         al_religion2000, veto_u, ter_war, stab_ipw, conflict_id) %>%
+  na.omit() %>%
+  mutate(across(everything(), as.numeric))
+
+# Convert time to years
+X$time_to_recur <- X$time_to_recur / 365.25
+
+# Train Random Survival Forest model on the entire dataset
+fit <- rfsrc(
+  Surv(time_to_recur, recur_side) ~ ., 
+  data = X %>% select(-stab_ipw, -conflict_id),  # Exclude weights and cluster IDs from predictors
+  ntree = 1000, 
+  nodesize = 5, 
+  nsplit = 50,
+  case.wt = X$stab_ipw,  # Include stabilized weights
+  block.size = 1,  # Recommended for clustering
+  cluster = X$conflict_id  # Cluster by conflict_id
+)
+
+# Predict survival probabilities for the entire dataset
+pred <- predict(fit, X %>% select(-stab_ipw, -conflict_id), type = "response")
+survival_probs <- as.data.frame(pred$survival)
+
+# Extract time points (already in years)
+time_points <- fit$time.interest
+colnames(survival_probs) <- paste("Time", round(time_points, 2), sep = "_")
+survival_probs$id <- 1:nrow(survival_probs)
+X$id <- 1:nrow(X)
+
+# Convert survival probabilities to long format for plotting
+survival_probs_long <- survival_probs %>%
+  pivot_longer(cols = -id, names_to = "Time", values_to = "Probability") %>%
+  mutate(Time = as.numeric(gsub("Time_", "", Time)))
+
+# Combine with the original data to match IDs
+survival_probs_long <- left_join(survival_probs_long, X, by = "id")
+
+# Filter data to include only the first 35 years
+survival_probs_long <- survival_probs_long %>%
+  filter(Time <= 35)
+
+# Function to calculate mean probabilities
+calculate_summary <- function(data) {
+  data %>%
+    group_by(Time) %>%
+    summarise(
+      Mean_Probability = mean(Probability, na.rm = TRUE)
+    )
+}
+
+# Calculate summary statistics for each binary outcome variable
+dis_summary <- calculate_summary(filter(survival_probs_long, dis == 1))
+cease_summary <- calculate_summary(filter(survival_probs_long, cease == 1))
+govvic_summary <- calculate_summary(filter(survival_probs_long, govvic == 1))
+rebvic_summary <- calculate_summary(filter(survival_probs_long, rebvic == 1))
+lowac_summary <- calculate_summary(filter(survival_probs_long, lowac == 1))
+peace_summary <- calculate_summary(filter(survival_probs_long, peace == 1))
+
+# Plot using ggplot2, one line per variable of interest, restricted to 35 years
+ggplot() +
+  geom_line(data = dis_summary, aes(x = Time, y = Mean_Probability, color = "Disappearance"),linewidth=.8) +
+  geom_line(data = cease_summary, aes(x = Time, y = Mean_Probability, color = "Ceasefire"), linewidth=.8) +
+  geom_line(data = govvic_summary, aes(x = Time, y = Mean_Probability, color = "Government Victory"), linewidth=.8) +
+  geom_line(data = rebvic_summary, aes(x = Time, y = Mean_Probability, color = "Rebel Victory"), linewidth=.8) +
+  geom_line(data = lowac_summary, aes(x = Time, y = Mean_Probability, color = "Low Activity"), linewidth=.8) +
+  geom_line(data = peace_summary, aes(x = Time, y = Mean_Probability, color = "Peace Agreement"), linewidth=.8) +
+  scale_x_continuous(breaks = seq(0, 35, by = 5)) +  # Set breaks every 5 years up to 35
+  labs(
+    title = "",
+    x = "Time (Years)",
+    y = "Survival Probability",
+    color = "Variable"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+
+### RSF with Ebal
+```{r}
+# Load required libraries
+library(randomForestSRC)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# Subsetting and cleaning data
+X <- matched_data %>%
+  select(time_to_recur_any, recur_any, dis, cease, govvic, rebvic, lowac, peace, W4, pko_u, log_dur, 
+         cold_war, p_polity2, fe_etfra, log_gdp, log_pop, ps_original, 
+         al_religion2000, veto_u, ter_war, ebal, conflict_id) %>%
+  na.omit() %>%
+  mutate(across(everything(), as.numeric))
+
+# Convert time to years
+X$time_to_recur_any <- X$time_to_recur_any / 365.25
+
+# Train Random Survival Forest model on the entire dataset
+fit <- rfsrc(
+  Surv(time_to_recur_any, recur_any) ~ ., 
+  data = X %>% select(-ebal, -conflict_id),  # Exclude weights and cluster IDs from predictors
+  ntree = 1000, 
+  nodesize = 5, 
+  nsplit = 50,
+  case.wt = X$ebal,  # Include stabilized weights
+  block.size = 1,  # Recommended for clustering
+  cluster = X$conflict_id  # Cluster by conflict_id
+)
+
+# Predict survival probabilities for the entire dataset
+pred <- predict(fit, X %>% select(-ebal, -conflict_id), type = "response")
+survival_probs <- as.data.frame(pred$survival)
+
+# Extract time points (already in years)
+time_points <- fit$time.interest
+colnames(survival_probs) <- paste("Time", round(time_points, 2), sep = "_")
+survival_probs$id <- 1:nrow(survival_probs)
+X$id <- 1:nrow(X)
+
+# Convert survival probabilities to long format for plotting
+survival_probs_long <- survival_probs %>%
+  pivot_longer(cols = -id, names_to = "Time", values_to = "Probability") %>%
+  mutate(Time = as.numeric(gsub("Time_", "", Time)))
+
+# Combine with the original data to match IDs
+survival_probs_long <- left_join(survival_probs_long, X, by = "id")
+
+# Filter data to include only the first 35 years
+survival_probs_long <- survival_probs_long %>%
+  filter(Time <= 35)
+
+# Function to calculate mean probabilities
+calculate_summary <- function(data) {
+  data %>%
+    group_by(Time) %>%
+    summarise(
+      Mean_Probability = mean(Probability, na.rm = TRUE)
+    )
+}
+
+# Calculate summary statistics for each binary outcome variable
+dis_summary <- calculate_summary(filter(survival_probs_long, dis == 1))
+cease_summary <- calculate_summary(filter(survival_probs_long, cease == 1))
+govvic_summary <- calculate_summary(filter(survival_probs_long, govvic == 1))
+rebvic_summary <- calculate_summary(filter(survival_probs_long, rebvic == 1))
+lowac_summary <- calculate_summary(filter(survival_probs_long, lowac == 1))
+peace_summary <- calculate_summary(filter(survival_probs_long, peace == 1))
+
+# Plot using ggplot2, one line per variable of interest, restricted to 35 years
+ggplot() +
+  geom_line(data = dis_summary, aes(x = Time, y = Mean_Probability, color = "Disappearance"), linewidth=.8) +
+  geom_line(data = cease_summary, aes(x = Time, y = Mean_Probability, color = "Ceasefire"),linewidth=.8) +
+  geom_line(data = govvic_summary, aes(x = Time, y = Mean_Probability, color = "Government Victory"),linewidth=.8) +
+  geom_line(data = rebvic_summary, aes(x = Time, y = Mean_Probability, color = "Rebel Victory"),linewidth=.8) +
+  geom_line(data = lowac_summary, aes(x = Time, y = Mean_Probability, color = "Low Activity"),linewidth=.8) +
+  geom_line(data = peace_summary, aes(x = Time, y = Mean_Probability, color = "Peace Agreement"),linewidth=.8) +
+  scale_x_continuous(breaks = seq(0, 35, by = 5)) +  # Set breaks every 5 years up to 35
+  labs(
+    title = "",
+    x = "Time (Years)",
+    y = "Survival Probability",
+    color = "Variable"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+
+
+
+
+
+
+
+
+
+
+
+
+######### Recur_side
+
+# Subsetting and cleaning data
+X <- matched_data %>%
+  select(time_to_recur, recur_side, dis, cease, govvic, rebvic, lowac, peace, W4, pko_u, log_dur, 
+         cold_war, p_polity2, fe_etfra, log_gdp, log_pop, ps_original, 
+         al_religion2000, veto_u, ter_war, ebal, conflict_id) %>%
+  na.omit() %>%
+  mutate(across(everything(), as.numeric))
+
+# Convert time to years
+X$time_to_recur <- X$time_to_recur / 365.25
+
+# Train Random Survival Forest model on the entire dataset
+fit <- rfsrc(
+  Surv(time_to_recur, recur_side) ~ ., 
+  data = X %>% select(-ebal, -conflict_id),  # Exclude weights and cluster IDs from predictors
+  ntree = 1000, 
+  nodesize = 5, 
+  nsplit = 50,
+  case.wt = X$ebal,  # Include stabilized weights
+  block.size = 1,  # Recommended for clustering
+  cluster = X$conflict_id  # Cluster by conflict_id
+)
+
+# Predict survival probabilities for the entire dataset
+pred <- predict(fit, X %>% select(-ebal, -conflict_id), type = "response")
+survival_probs <- as.data.frame(pred$survival)
+
+# Extract time points (already in years)
+time_points <- fit$time.interest
+colnames(survival_probs) <- paste("Time", round(time_points, 2), sep = "_")
+survival_probs$id <- 1:nrow(survival_probs)
+X$id <- 1:nrow(X)
+
+# Convert survival probabilities to long format for plotting
+survival_probs_long <- survival_probs %>%
+  pivot_longer(cols = -id, names_to = "Time", values_to = "Probability") %>%
+  mutate(Time = as.numeric(gsub("Time_", "", Time)))
+
+# Combine with the original data to match IDs
+survival_probs_long <- left_join(survival_probs_long, X, by = "id")
+
+# Filter data to include only the first 35 years
+survival_probs_long <- survival_probs_long %>%
+  filter(Time <= 35)
+
+# Function to calculate mean probabilities
+calculate_summary <- function(data) {
+  data %>%
+    group_by(Time) %>%
+    summarise(
+      Mean_Probability = mean(Probability, na.rm = TRUE)
+    )
+}
+
+# Calculate summary statistics for each binary outcome variable
+dis_summary <- calculate_summary(filter(survival_probs_long, dis == 1))
+cease_summary <- calculate_summary(filter(survival_probs_long, cease == 1))
+govvic_summary <- calculate_summary(filter(survival_probs_long, govvic == 1))
+rebvic_summary <- calculate_summary(filter(survival_probs_long, rebvic == 1))
+lowac_summary <- calculate_summary(filter(survival_probs_long, lowac == 1))
+peace_summary <- calculate_summary(filter(survival_probs_long, peace == 1))
+
+# Plot using ggplot2, one line per variable of interest, restricted to 35 years
+ggplot() +
+  geom_line(data = dis_summary, aes(x = Time, y = Mean_Probability, color = "Disappearance"),linewidth=.8) +
+  geom_line(data = cease_summary, aes(x = Time, y = Mean_Probability, color = "Ceasefire"), linewidth=.8) +
+  geom_line(data = govvic_summary, aes(x = Time, y = Mean_Probability, color = "Government Victory"), linewidth=.8) +
+  geom_line(data = rebvic_summary, aes(x = Time, y = Mean_Probability, color = "Rebel Victory"), linewidth=.8) +
+  geom_line(data = lowac_summary, aes(x = Time, y = Mean_Probability, color = "Low Activity"), linewidth=.8) +
+  geom_line(data = peace_summary, aes(x = Time, y = Mean_Probability, color = "Peace Agreement"), linewidth=.8) +
+  scale_x_continuous(breaks = seq(0, 35, by = 5)) +  # Set breaks every 5 years up to 35
+  labs(
+    title = "",
+    x = "Time (Years)",
+    y = "Survival Probability",
+    color = "Variable"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+
+### RSF without
+
+```{r}
+# Load required libraries
+library(randomForestSRC)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# Subsetting and cleaning data
+X <- matched_data %>%
+  select(time_to_recur_any, recur_any, dis, cease, govvic, rebvic, lowac, peace, W4, pko_u, log_dur, 
+         cold_war, p_polity2, fe_etfra, log_gdp, log_pop, ps_original, 
+         al_religion2000, veto_u, ter_war, conflict_id) %>%
+  na.omit() %>%
+  mutate(across(everything(), as.numeric))
+
+# Convert time to years
+X$time_to_recur_any <- X$time_to_recur_any / 365.25
+
+# Train Random Survival Forest model on the entire dataset
+fit <- rfsrc(
+  Surv(time_to_recur_any, recur_any) ~ ., 
+  data = X %>% select(-conflict_id),  # Exclude weights and cluster IDs from predictors
+  ntree = 1000, 
+  nodesize = 5, 
+  nsplit = 50,
+  block.size = 1,  # Recommended for clustering
+  cluster = X$conflict_id  # Cluster by conflict_id
+)
+
+# Predict survival probabilities for the entire dataset
+pred <- predict(fit, X %>% select( -conflict_id), type = "response")
+survival_probs <- as.data.frame(pred$survival)
+
+# Extract time points (already in years)
+time_points <- fit$time.interest
+colnames(survival_probs) <- paste("Time", round(time_points, 2), sep = "_")
+survival_probs$id <- 1:nrow(survival_probs)
+X$id <- 1:nrow(X)
+
+# Convert survival probabilities to long format for plotting
+survival_probs_long <- survival_probs %>%
+  pivot_longer(cols = -id, names_to = "Time", values_to = "Probability") %>%
+  mutate(Time = as.numeric(gsub("Time_", "", Time)))
+
+# Combine with the original data to match IDs
+survival_probs_long <- left_join(survival_probs_long, X, by = "id")
+
+# Filter data to include only the first 35 years
+survival_probs_long <- survival_probs_long %>%
+  filter(Time <= 35)
+
+# Function to calculate mean probabilities
+calculate_summary <- function(data) {
+  data %>%
+    group_by(Time) %>%
+    summarise(
+      Mean_Probability = mean(Probability, na.rm = TRUE)
+    )
+}
+
+# Calculate summary statistics for each binary outcome variable
+dis_summary <- calculate_summary(filter(survival_probs_long, dis == 1))
+cease_summary <- calculate_summary(filter(survival_probs_long, cease == 1))
+govvic_summary <- calculate_summary(filter(survival_probs_long, govvic == 1))
+rebvic_summary <- calculate_summary(filter(survival_probs_long, rebvic == 1))
+lowac_summary <- calculate_summary(filter(survival_probs_long, lowac == 1))
+peace_summary <- calculate_summary(filter(survival_probs_long, peace == 1))
+
+# Plot using ggplot2, one line per variable of interest, restricted to 35 years
+ggplot() +
+  geom_line(data = dis_summary, aes(x = Time, y = Mean_Probability, color = "Disappearance"), linewidth=.8) +
+  geom_line(data = cease_summary, aes(x = Time, y = Mean_Probability, color = "Ceasefire"),linewidth=.8) +
+  geom_line(data = govvic_summary, aes(x = Time, y = Mean_Probability, color = "Government Victory"),linewidth=.8) +
+  geom_line(data = rebvic_summary, aes(x = Time, y = Mean_Probability, color = "Rebel Victory"),linewidth=.8) +
+  geom_line(data = lowac_summary, aes(x = Time, y = Mean_Probability, color = "Low Activity"),linewidth=.8) +
+  geom_line(data = peace_summary, aes(x = Time, y = Mean_Probability, color = "Peace Agreement"),linewidth=.8) +
+  scale_x_continuous(breaks = seq(0, 35, by = 5)) +  # Set breaks every 5 years up to 35
+  labs(
+    title = "",
+    x = "Time (Years)",
+    y = "Survival Probability",
+    color = "Variable"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+
+
+
+
+
+
+
+
+
+
+
+
+######### Recur_side
+
+# Subsetting and cleaning data
+X <- matched_data %>%
+  select(time_to_recur, recur_side, dis, cease, govvic, rebvic, lowac, peace, W4, pko_u, log_dur, 
+         cold_war, p_polity2, fe_etfra, log_gdp, log_pop, ps_original, 
+         al_religion2000, veto_u, ter_war, conflict_id) %>%
+  na.omit() %>%
+  mutate(across(everything(), as.numeric))
+
+# Convert time to years
+X$time_to_recur <- X$time_to_recur / 365.25
+
+# Train Random Survival Forest model on the entire dataset
+fit <- rfsrc(
+  Surv(time_to_recur, recur_side) ~ ., 
+  data = X %>% select(-conflict_id),  # Exclude weights and cluster IDs from predictors
+  ntree = 1000, 
+  nodesize = 5, 
+  nsplit = 50,
+  case.wt = X$ebal,  # Include stabilized weights
+  block.size = 1,  # Recommended for clustering
+  cluster = X$conflict_id  # Cluster by conflict_id
+)
+
+# Predict survival probabilities for the entire dataset
+pred <- predict(fit, X %>% select(-conflict_id), type = "response")
+survival_probs <- as.data.frame(pred$survival)
+
+# Extract time points (already in years)
+time_points <- fit$time.interest
+colnames(survival_probs) <- paste("Time", round(time_points, 2), sep = "_")
+survival_probs$id <- 1:nrow(survival_probs)
+X$id <- 1:nrow(X)
+
+# Convert survival probabilities to long format for plotting
+survival_probs_long <- survival_probs %>%
+  pivot_longer(cols = -id, names_to = "Time", values_to = "Probability") %>%
+  mutate(Time = as.numeric(gsub("Time_", "", Time)))
+
+# Combine with the original data to match IDs
+survival_probs_long <- left_join(survival_probs_long, X, by = "id")
+
+# Filter data to include only the first 35 years
+survival_probs_long <- survival_probs_long %>%
+  filter(Time <= 35)
+
+# Function to calculate mean probabilities
+calculate_summary <- function(data) {
+  data %>%
+    group_by(Time) %>%
+    summarise(
+      Mean_Probability = mean(Probability, na.rm = TRUE)
+    )
+}
+
+# Calculate summary statistics for each binary outcome variable
+dis_summary <- calculate_summary(filter(survival_probs_long, dis == 1))
+cease_summary <- calculate_summary(filter(survival_probs_long, cease == 1))
+govvic_summary <- calculate_summary(filter(survival_probs_long, govvic == 1))
+rebvic_summary <- calculate_summary(filter(survival_probs_long, rebvic == 1))
+lowac_summary <- calculate_summary(filter(survival_probs_long, lowac == 1))
+peace_summary <- calculate_summary(filter(survival_probs_long, peace == 1))
+
+# Plot using ggplot2, one line per variable of interest, restricted to 35 years
+ggplot() +
+  geom_line(data = dis_summary, aes(x = Time, y = Mean_Probability, color = "Disappearance"),linewidth=.8) +
+  geom_line(data = cease_summary, aes(x = Time, y = Mean_Probability, color = "Ceasefire"), linewidth=.8) +
+  geom_line(data = govvic_summary, aes(x = Time, y = Mean_Probability, color = "Government Victory"), linewidth=.8) +
+  geom_line(data = rebvic_summary, aes(x = Time, y = Mean_Probability, color = "Rebel Victory"), linewidth=.8) +
+  geom_line(data = lowac_summary, aes(x = Time, y = Mean_Probability, color = "Low Activity"), linewidth=.8) +
+  geom_line(data = peace_summary, aes(x = Time, y = Mean_Probability, color = "Peace Agreement"), linewidth=.8) +
+  scale_x_continuous(breaks = seq(0, 35, by = 5)) +  # Set breaks every 5 years up to 35
+  labs(
+    title = "",
+    x = "Time (Years)",
+    y = "Survival Probability",
+    color = "Variable"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+
+
+
+### RSF with CI
+```{r}
+# Load required libraries
+library(randomForestSRC)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# Subsetting and cleaning data
+X <- matched_data %>%
+  select(time_to_recur_any, recur_any, dis, cease, govvic, rebvic, lowac, peace, W4, pko_u, log_dur, 
+         cold_war, p_polity2, fe_etfra, log_gdp, log_pop, ps_original, 
+         al_religion2000, veto_u,  ter_war, ebal, conflict_id) %>%
+  na.omit() %>%
+  mutate(across(everything(), as.numeric))
+
+# Convert time to years
+X$time_to_recur <- X$time_to_recur_any/ 365.25
+
+# Train the Random Survival Forest model on the entire dataset
+fit <- rfsrc(
+  Surv(time_to_recur, recur_any) ~ ., 
+  data = X %>% select(-ebal, -conflict_id),  # Exclude weights and cluster IDs from predictors
+  ntree = 1000, 
+  nodesize = 5, 
+  nsplit = 50, 
+  importance = TRUE 
+  #case.wt = X$ebal,  # Include stabilized weights
+  #cluster = X$conflict_id  # Cluster by conflict_id
+)
+
+# Predict survival probabilities for the entire dataset
+pred <- predict(fit, X %>% select(-ebal, -conflict_id), OOB = TRUE, type = "response")
+survival_probs <- as.data.frame(pred$survival)
+
+# Extract time points (already in years)
+time_points <- fit$time.interest
+colnames(survival_probs) <- paste("Time", round(time_points, 2), sep = "_")
+survival_probs$id <- 1:nrow(survival_probs)
+X$id <- 1:nrow(X)
+
+# Convert survival probabilities to long format for plotting
+survival_probs_long <- survival_probs %>%
+  pivot_longer(cols = -id, names_to = "Time", values_to = "Probability") %>%
+  mutate(Time = as.numeric(gsub("Time_", "", Time)))
+
+# Combine with the original data to get the binary outcome variables
+survival_probs_long <- left_join(survival_probs_long, X, by = "id")
+
+# Function to calculate mean and confidence intervals
+calculate_summary <- function(data) {
+  data %>%
+    group_by(Time) %>%
+    summarise(
+      Mean_Probability = mean(Probability, na.rm = TRUE),
+      SD = sd(Probability, na.rm = TRUE),
+      Lower_CI = Mean_Probability - qt(0.975, length(Probability)-1) * SD / sqrt(length(Probability)),
+      Upper_CI = Mean_Probability + qt(0.975, length(Probability)-1) * SD / sqrt(length(Probability))
+    )
+}
+
+# Calculate summary statistics for each binary outcome variable
+dis_summary <- calculate_summary(filter(survival_probs_long, dis == 1))
+cease_summary <- calculate_summary(filter(survival_probs_long, cease == 1))
+govvic_summary <- calculate_summary(filter(survival_probs_long, govvic == 1))
+rebvic_summary <- calculate_summary(filter(survival_probs_long, rebvic == 1))
+lowac_summary <- calculate_summary(filter(survival_probs_long, lowac == 1))
+peace_summary <- calculate_summary(filter(survival_probs_long, peace == 1))
+
+# Plot using ggplot2, one line per variable of interest with confidence intervals
+ggplot() +
+  geom_line(data = dis_summary, aes(x = Time, y = Mean_Probability, color = "Disappearance")) +
+  geom_ribbon(data = dis_summary, aes(x = Time, ymin = Lower_CI, ymax = Upper_CI, fill = "Disappearance"), alpha = 0.5) +
+  geom_line(data = cease_summary, aes(x = Time, y = Mean_Probability, color = "Ceasefire")) +
+  geom_ribbon(data = cease_summary, aes(x = Time, ymin = Lower_CI, ymax = Upper_CI, fill = "Ceasefire"), alpha = 0.5) +
+  geom_line(data = govvic_summary, aes(x = Time, y = Mean_Probability, color = "Government Victory")) +
+  geom_ribbon(data = govvic_summary, aes(x = Time, ymin = Lower_CI, ymax = Upper_CI, fill = "Government Victory"), alpha = 0.5) +
+  geom_line(data = rebvic_summary, aes(x = Time, y = Mean_Probability, color = "Rebel Victory")) +
+  geom_ribbon(data = rebvic_summary, aes(x = Time, ymin = Lower_CI, ymax = Upper_CI, fill = "Rebel Victory"), alpha = 0.5) +
+  geom_line(data = lowac_summary, aes(x = Time, y = Mean_Probability, color = "Low Activity")) +
+  geom_ribbon(data = lowac_summary, aes(x = Time, ymin = Lower_CI, ymax = Upper_CI, fill = "Low Activity"), alpha = 0.5) +
+  geom_line(data = peace_summary, aes(x = Time, y = Mean_Probability, color = "Peace Agreement")) +
+  geom_ribbon(data = peace_summary, aes(x = Time, ymin = Lower_CI, ymax = Upper_CI, fill = "Peace Agreement"), alpha = 0.5) +
+  scale_x_continuous(breaks = seq(0, max(survival_probs_long$Time), by = 5)) +  # Set breaks every 5 years
+  labs(
+    title = "Survival Probabilities Over Time",
+    x = "Time (Years)",
+    y = "Survival Probability",
+    color = "Variable",
+    fill = "Variable"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+
+
+### RSF with Sep
+```{r}
+# Load required libraries
+library(randomForestSRC)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# Step 1: Subset and clean data
+X <- matched_data %>%
+  select(time_to_recur_any, recur_any, outcome, W4, pko_u, log_dur, 
+         cold_war, p_polity2, fe_etfra, log_gdp, log_pop, ps, 
+         al_religion2000, veto_u, ter_war, ebal, conflict_id,fe_cultdiv) %>%
+  na.omit() %>%
+  mutate(across(everything(), as.numeric))
+
+# Step 2: Convert `outcome` to a factor with descriptive labels
+X$outcome <- factor(X$outcome, levels = 1:6, labels = c(
+  "Peace Agreement", "Ceasefire", "Government Victory",
+  "Rebel Victory", "Low Activity", "Actor Ceases"
+))
+
+# Step 3: One-hot encode the `outcome` variable
+dummies <- model.matrix(~ outcome - 1, data = X) %>% as.data.frame()
+
+# Rename columns for clarity
+colnames(dummies) <- c("Peace_Agreement", "Ceasefire", "Government_Victory",
+                       "Rebel_Victory", "Low_Activity", "Actor_Ceases")
+
+# Combine the dummies with the main data
+X <- cbind(X, dummies)
+
+# Drop the original `outcome` column
+X <- X %>% select(-outcome)
+
+# Step 4: Convert time to years
+X$time_to_recur <- X$time_to_recur_any / 365.25
+
+# Step 5: Train the Random Survival Forest model
+fit <- rfsrc(
+  Surv(time_to_recur, recur_any) ~ ., 
+  data = X %>% select(-ebal, -conflict_id),  # Exclude weights and cluster IDs
+  ntree = 1000, 
+  nodesize = 5, 
+  nsplit = 50, 
+  importance = TRUE, 
+  case.wt = X$ebal,  # Use stabilized weights
+  cluster = X$conflict_id  # Cluster by conflict_id
+)
+
+# Step 6: Predict survival probabilities
+pred <- predict(fit, X %>% select(-ebal, -conflict_id), OOB = TRUE, type = "response")
+survival_probs <- as.data.frame(pred$survival)
+
+# Extract time points (already in years)
+time_points <- fit$time.interest
+colnames(survival_probs) <- paste("Time", round(time_points, 2), sep = "_")
+survival_probs$id <- 1:nrow(survival_probs)
+X$id <- 1:nrow(X)
+
+# Step 7: Convert survival probabilities to long format
+survival_probs_long <- survival_probs %>%
+  pivot_longer(cols = -id, names_to = "Time", values_to = "Probability") %>%
+  mutate(Time = as.numeric(sub("Time_", "", Time)))
+
+# Combine with the original data to include one-hot encoded outcomes
+survival_probs_long <- left_join(survival_probs_long, X, by = "id")
+
+# Step 8: Define function to calculate summary statistics
+calculate_summary <- function(data, outcome_col) {
+  data %>%
+    filter(.data[[outcome_col]] == 1) %>%  # Filter rows based on outcome column
+    group_by(Time) %>%
+    summarise(
+      Mean_Probability = mean(Probability, na.rm = TRUE),
+      SD = sd(Probability, na.rm = TRUE),
+      n = n(),
+      Lower_CI = Mean_Probability - qt(0.975, n - 1) * SD / sqrt(n),
+      Upper_CI = Mean_Probability + qt(0.975, n - 1) * SD / sqrt(n),
+      .groups = "drop"
+    )
+}
+
+# Step 9: Generate summaries for each one-hot encoded outcome
+outcome_cols <- c("Peace_Agreement", "Ceasefire", "Government_Victory",
+                  "Rebel_Victory", "Low_Activity", "Actor_Ceases")
+
+summary_list <- lapply(outcome_cols, function(outcome_col) {
+  calculate_summary(survival_probs_long, outcome_col)
+})
+names(summary_list) <- outcome_cols
+
+# Step 10: Combine summaries into a single data frame for plotting
+summary_combined <- bind_rows(summary_list, .id = "Outcome")
+
+# Step 11: Plot the survival probabilities
+ggplot(summary_combined, aes(x = Time, y = Mean_Probability, color = Outcome, fill = Outcome)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = Lower_CI, ymax = Upper_CI), alpha = 0.3) +
+  scale_x_continuous(breaks = seq(0, max(summary_combined$Time, na.rm = TRUE), by = 5)) +
+  labs(
+    title = "Survival Probabilities Over Time by Outcome",
+    x = "Time (Years)",
+    y = "Survival Probability",
+    color = "Outcome",
+    fill = "Outcome"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+```
+## RSF -Im
+
+### Stab IPW
+
+```{r}
+# Load required libraries
+library(randomForestSRC)
+library(dplyr)
+library(ggplot2)
+
+
+######### Recur_Any
+
+# Subset and clean data, including `dis` and removing `govvic`
+X <- matched_data %>%
+  select(time_to_recur_any, recur_any, dis, cease, rebvic, lowac, peace, W4, pko_u, log_dur, 
+         cold_war, p_polity2, fe_etfra, log_gdp, log_pop, ps_original, 
+         al_religion2000, veto_u, ter_war, stab_ipw, conflict_id) %>%  # Include `dis` and exclude `govvic`
+  na.omit() %>%
+  mutate(across(everything(), as.numeric))
+
+
+# Train Random Survival Forest model on the entire dataset
+fit <- rfsrc(
+  Surv(time_to_recur_any, recur_any) ~ ., 
+  data = X %>% select(-stab_ipw, -conflict_id),  # Exclude weights, cluster IDs, and raw time variable
+  ntree = 1000, 
+  nodesize = 5, 
+  nsplit = 50,
+  importance = TRUE,  # Enable variable importance calculation
+  case.wt = X$stab_ipw,  # Include stabilized weights
+  block.size = 1,  # Recommended for clustering
+  cluster = X$conflict_id  # Cluster by conflict_id
+)
+
+# Extract variable importance
+var_importance <- fit$importance
+var_importance_df <- data.frame(
+  Variable = names(var_importance),
+  Importance = var_importance
+) %>%
+  arrange(desc(Importance))  # Sort by importance
+
+# Add custom labels for variables
+variable_labels <- c(
+  "dis" = "Actor Ceases",
+  "cease" = "Ceasefire",
+  "rebvic" = "Rebel Victory",
+  "lowac" = "Low Activity",
+  "peace" = "Peace Agreement",
+  "W4" = "Coalition Size",
+  "pko_u" = "Peacekeeping Missions",
+  "log_dur" = "Log(Duration)",
+  "cold_war" = "Cold War",
+  "p_polity2" = "Polity Score",
+  "fe_etfra" = "Ethnic Fractionalization",
+  "log_gdp" = "Log(GDP per Capita)",
+  "log_pop" = "Log(Population)",
+  "ps_original" = "Power-Sharing",
+  "al_religion2000" = "Religion Fractionalization",
+  "veto_u" = "Number of Veto Players",
+  "ter_war" = "War over Territory"
+)
+
+# Add labels to the variable importance DataFrame
+var_importance_df$Label <- variable_labels[var_importance_df$Variable]
+
+# Print variable importance
+print(var_importance_df)
+
+# Plot variable importance using ggplot2
+ggplot(var_importance_df, aes(x = reorder(Label, Importance), y = Importance)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +  # Horizontal bar plot
+  labs(
+    title = "Variable Importance from Random Survival Forest (With dis, Without govvic)",
+    x = "Variable",
+    y = "Importance"
+  ) +
+  theme_minimal()
+
+
+
+
+######### Recur_Side
+# Subset and clean data, including `dis` and removing `govvic`
+X <- matched_data %>%
+  select(time_to_recur, recur_side, dis, cease, rebvic, lowac, peace, W4, pko_u, log_dur, 
+         cold_war, p_polity2, fe_etfra, log_gdp, log_pop, ps_original, 
+         al_religion2000, veto_u, ter_war, stab_ipw, conflict_id) %>%  # Include `dis` and exclude `govvic`
+  na.omit() %>%
+  mutate(across(everything(), as.numeric))
+
+
+# Train Random Survival Forest model on the entire dataset
+fit <- rfsrc(
+  Surv(time_to_recur, recur_side) ~ ., 
+  data = X %>% select(-stab_ipw, -conflict_id),  # Exclude weights, cluster IDs, and raw time variable
+  ntree = 1000, 
+  nodesize = 5, 
+  nsplit = 50,
+  importance = TRUE,  # Enable variable importance calculation
+  case.wt = X$stab_ipw,  # Include stabilized weights
+  block.size = 1,  # Recommended for clustering
+  cluster = X$conflict_id  # Cluster by conflict_id
+)
+
+# Extract variable importance
+var_importance <- fit$importance
+var_importance_df <- data.frame(
+  Variable = names(var_importance),
+  Importance = var_importance
+) %>%
+  arrange(desc(Importance))  # Sort by importance
+
+# Add custom labels for variables
+variable_labels <- c(
+  "dis" = "Actor Ceases",
+  "cease" = "Ceasefire",
+  "rebvic" = "Rebel Victory",
+  "lowac" = "Low Activity",
+  "peace" = "Peace Agreement",
+  "W4" = "Coalition Size",
+  "pko_u" = "Peacekeeping Missions",
+  "log_dur" = "Log(Duration)",
+  "cold_war" = "Cold War",
+  "p_polity2" = "Polity Score",
+  "fe_etfra" = "Ethnic Fractionalization",
+  "log_gdp" = "Log(GDP per Capita)",
+  "log_pop" = "Log(Population)",
+  "ps_original" = "Power-Sharing",
+  "al_religion2000" = "Religion Fractionalization",
+  "veto_u" = "Number of Veto Players",
+  "ter_war" = "War over Territory"
+)
+
+# Add labels to the variable importance DataFrame
+var_importance_df$Label <- variable_labels[var_importance_df$Variable]
+
+# Print variable importance
+print(var_importance_df)
+
+# Plot variable importance using ggplot2
+ggplot(var_importance_df, aes(x = reorder(Label, Importance), y = Importance)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +  # Horizontal bar plot
+  labs(
+    title = "Variable Importance from Random Survival Forest (With dis, Without govvic)",
+    x = "Variable",
+    y = "Importance"
+  ) +
+  theme_minimal()
+```
+
+
+
+### Ebal
+```{r}
+# Load required libraries
+library(randomForestSRC)
+library(dplyr)
+library(ggplot2)
+
+
+######### Recur_Any
+
+# Subset and clean data, including `dis` and removing `govvic`
+X <- matched_data %>%
+  select(time_to_recur_any, recur_any, dis, cease, rebvic, lowac, peace, W4, pko_u, log_dur, 
+         cold_war, p_polity2, fe_etfra, log_gdp, log_pop, ps_original, 
+         al_religion2000, veto_u, ter_war, ebal, conflict_id) %>%  # Include `dis` and exclude `govvic`
+  na.omit() %>%
+  mutate(across(everything(), as.numeric))
+
+
+# Train Random Survival Forest model on the entire dataset
+fit <- rfsrc(
+  Surv(time_to_recur_any, recur_any) ~ ., 
+  data = X %>% select(-ebal, -conflict_id),  # Exclude weights, cluster IDs, and raw time variable
+  ntree = 1000, 
+  nodesize = 5, 
+  nsplit = 50,
+  importance = TRUE,  # Enable variable importance calculation
+  case.wt = X$ebal,  # Include stabilized weights
+  block.size = 1,  # Recommended for clustering
+  cluster = X$conflict_id  # Cluster by conflict_id
+)
+
+# Extract variable importance
+var_importance <- fit$importance
+var_importance_df <- data.frame(
+  Variable = names(var_importance),
+  Importance = var_importance
+) %>%
+  arrange(desc(Importance))  # Sort by importance
+
+# Add custom labels for variables
+variable_labels <- c(
+  "dis" = "Actor Ceases",
+  "cease" = "Ceasefire",
+  "rebvic" = "Rebel Victory",
+  "lowac" = "Low Activity",
+  "peace" = "Peace Agreement",
+  "W4" = "Coalition Size",
+  "pko_u" = "Peacekeeping Missions",
+  "log_dur" = "Log(Duration)",
+  "cold_war" = "Cold War",
+  "p_polity2" = "Polity Score",
+  "fe_etfra" = "Ethnic Fractionalization",
+  "log_gdp" = "Log(GDP per Capita)",
+  "log_pop" = "Log(Population)",
+  "ps_original" = "Power-Sharing",
+  "al_religion2000" = "Religion Fractionalization",
+  "veto_u" = "Number of Veto Players",
+  "ter_war" = "War over Territory"
+)
+
+# Add labels to the variable importance DataFrame
+var_importance_df$Label <- variable_labels[var_importance_df$Variable]
+
+# Print variable importance
+print(var_importance_df)
+
+# Plot variable importance using ggplot2
+ggplot(var_importance_df, aes(x = reorder(Label, Importance), y = Importance)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +  # Horizontal bar plot
+  labs(
+    title = "Variable Importance from Random Survival Forest (With dis, Without govvic)",
+    x = "Variable",
+    y = "Importance"
+  ) +
+  theme_minimal()
+
+
+
+
+######### Recur_Side
+# Subset and clean data, including `dis` and removing `govvic`
+X <- matched_data %>%
+  select(time_to_recur, recur_side, dis, cease, rebvic, lowac, peace, W4, pko_u, log_dur, 
+         cold_war, p_polity2, fe_etfra, log_gdp, log_pop, ps_original, 
+         al_religion2000, veto_u, ter_war, ebal, conflict_id) %>%  # Include `dis` and exclude `govvic`
+  na.omit() %>%
+  mutate(across(everything(), as.numeric))
+
+
+# Train Random Survival Forest model on the entire dataset
+fit <- rfsrc(
+  Surv(time_to_recur, recur_side) ~ ., 
+  data = X %>% select(-ebal, -conflict_id),  # Exclude weights, cluster IDs, and raw time variable
+  ntree = 1000, 
+  nodesize = 5, 
+  nsplit = 50,
+  importance = TRUE,  # Enable variable importance calculation
+  case.wt = X$ebal,  # Include stabilized weights
+  block.size = 1,  # Recommended for clustering
+  cluster = X$conflict_id  # Cluster by conflict_id
+)
+
+# Extract variable importance
+var_importance <- fit$importance
+var_importance_df <- data.frame(
+  Variable = names(var_importance),
+  Importance = var_importance
+) %>%
+  arrange(desc(Importance))  # Sort by importance
+
+# Add custom labels for variables
+variable_labels <- c(
+  "dis" = "Actor Ceases",
+  "cease" = "Ceasefire",
+  "rebvic" = "Rebel Victory",
+  "lowac" = "Low Activity",
+  "peace" = "Peace Agreement",
+  "W4" = "Coalition Size",
+  "pko_u" = "Peacekeeping Missions",
+  "log_dur" = "Log(Duration)",
+  "cold_war" = "Cold War",
+  "p_polity2" = "Polity Score",
+  "fe_etfra" = "Ethnic Fractionalization",
+  "log_gdp" = "Log(GDP per Capita)",
+  "log_pop" = "Log(Population)",
+  "ps_original" = "Power-Sharing",
+  "al_religion2000" = "Religion Fractionalization",
+  "veto_u" = "Number of Veto Players",
+  "ter_war" = "War over Territory"
+)
+
+# Add labels to the variable importance DataFrame
+var_importance_df$Label <- variable_labels[var_importance_df$Variable]
+
+# Print variable importance
+print(var_importance_df)
+
+# Plot variable importance using ggplot2
+ggplot(var_importance_df, aes(x = reorder(Label, Importance), y = Importance)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +  # Horizontal bar plot
+  labs(
+    title = "Variable Importance from Random Survival Forest (With dis, Without govvic)",
+    x = "Variable",
+    y = "Importance"
+  ) +
+  theme_minimal()
+```
+### Without
+```{r}
+# Load required libraries
+library(randomForestSRC)
+library(dplyr)
+library(ggplot2)
+
+
+######### Recur_Any
+
+# Subset and clean data, including `dis` and removing `govvic`
+X <- matched_data %>%
+  select(time_to_recur_any, recur_any, dis, cease, rebvic, lowac, peace, W4, pko_u, log_dur, 
+         cold_war, p_polity2, fe_etfra, log_gdp, log_pop, ps_original, 
+         al_religion2000, veto_u, ter_war, conflict_id) %>%  # Include `dis` and exclude `govvic`
+  na.omit() %>%
+  mutate(across(everything(), as.numeric))
+
+
+# Train Random Survival Forest model on the entire dataset
+fit <- rfsrc(
+  Surv(time_to_recur_any, recur_any) ~ ., 
+  data = X %>% select(-conflict_id),  # Exclude weights, cluster IDs, and raw time variable
+  ntree = 1000, 
+  nodesize = 5, 
+  nsplit = 50,
+  importance = TRUE,  # Enable variable importance calculation
+  block.size = 1,  # Recommended for clustering
+  cluster = X$conflict_id  # Cluster by conflict_id
+)
+
+# Extract variable importance
+var_importance <- fit$importance
+var_importance_df <- data.frame(
+  Variable = names(var_importance),
+  Importance = var_importance
+) %>%
+  arrange(desc(Importance))  # Sort by importance
+
+# Add custom labels for variables
+variable_labels <- c(
+  "dis" = "Actor Ceases",
+  "cease" = "Ceasefire",
+  "rebvic" = "Rebel Victory",
+  "lowac" = "Low Activity",
+  "peace" = "Peace Agreement",
+  "W4" = "Coalition Size",
+  "pko_u" = "Peacekeeping Missions",
+  "log_dur" = "Log(Duration)",
+  "cold_war" = "Cold War",
+  "p_polity2" = "Polity Score",
+  "fe_etfra" = "Ethnic Fractionalization",
+  "log_gdp" = "Log(GDP per Capita)",
+  "log_pop" = "Log(Population)",
+  "ps_original" = "Power-Sharing",
+  "al_religion2000" = "Religion Fractionalization",
+  "veto_u" = "Number of Veto Players",
+  "ter_war" = "War over Territory"
+)
+
+# Add labels to the variable importance DataFrame
+var_importance_df$Label <- variable_labels[var_importance_df$Variable]
+
+# Print variable importance
+print(var_importance_df)
+
+# Plot variable importance using ggplot2
+ggplot(var_importance_df, aes(x = reorder(Label, Importance), y = Importance)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +  # Horizontal bar plot
+  labs(
+    title = "Variable Importance from Random Survival Forest (With dis, Without govvic)",
+    x = "Variable",
+    y = "Importance"
+  ) +
+  theme_minimal()
+
+
+
+
+######### Recur_Side
+# Subset and clean data, including `dis` and removing `govvic`
+X <- matched_data %>%
+  select(time_to_recur, recur_side, dis, cease, rebvic, lowac, peace, W4, pko_u, log_dur, 
+         cold_war, p_polity2, fe_etfra, log_gdp, log_pop, ps_original, 
+         al_religion2000, veto_u, ter_war, conflict_id) %>%  # Include `dis` and exclude `govvic`
+  na.omit() %>%
+  mutate(across(everything(), as.numeric))
+
+
+# Train Random Survival Forest model on the entire dataset
+fit <- rfsrc(
+  Surv(time_to_recur, recur_side) ~ ., 
+  data = X %>% select(-conflict_id),  # Exclude weights, cluster IDs, and raw time variable
+  ntree = 1000, 
+  nodesize = 5, 
+  nsplit = 50,
+  importance = TRUE,  # Enable variable importance calculation
+  block.size = 1,  # Recommended for clustering
+  cluster = X$conflict_id  # Cluster by conflict_id
+)
+
+# Extract variable importance
+var_importance <- fit$importance
+var_importance_df <- data.frame(
+  Variable = names(var_importance),
+  Importance = var_importance
+) %>%
+  arrange(desc(Importance))  # Sort by importance
+
+# Add custom labels for variables
+variable_labels <- c(
+  "dis" = "Actor Ceases",
+  "cease" = "Ceasefire",
+  "rebvic" = "Rebel Victory",
+  "lowac" = "Low Activity",
+  "peace" = "Peace Agreement",
+  "W4" = "Coalition Size",
+  "pko_u" = "Peacekeeping Missions",
+  "log_dur" = "Log(Duration)",
+  "cold_war" = "Cold War",
+  "p_polity2" = "Polity Score",
+  "fe_etfra" = "Ethnic Fractionalization",
+  "log_gdp" = "Log(GDP per Capita)",
+  "log_pop" = "Log(Population)",
+  "ps_original" = "Power-Sharing",
+  "al_religion2000" = "Religion Fractionalization",
+  "veto_u" = "Number of Veto Players",
+  "ter_war" = "War over Territory"
+)
+
+# Add labels to the variable importance DataFrame
+var_importance_df$Label <- variable_labels[var_importance_df$Variable]
+
+# Print variable importance
+print(var_importance_df)
+
+# Plot variable importance using ggplot2
+ggplot(var_importance_df, aes(x = reorder(Label, Importance), y = Importance)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +  # Horizontal bar plot
+  labs(
+    title = "Variable Importance from Random Survival Forest (With dis, Without govvic)",
+    x = "Variable",
+    y = "Importance"
+  ) +
+  theme_minimal()
+```
+
+
