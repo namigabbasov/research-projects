@@ -1,7 +1,7 @@
 # **Predicting Peace Agreement Success with LLMs**
 
 ## **Overview**  
-This project undertakes a goal of predicting the sucess/failure of peace agreements based on their text and their document metadata. It investigates the application of Large Language Models (LLMs) in conflict and peace studies, focusing on three primary areas: text classification, text similarity, and predictive modeling. By analyzing unstructured text from the Peace Agreements Database and the UN General Debate speeches, the study aims to uncover factors that contribute to the success or failure of peace agreements.  
+This project aims to predict the success or failure of peace agreements using both their textual content and associated metadata. It explores how LLMs can be applied within conflict and peace studies, with a focus on three core tasks: text classification, text similarity, and predictive modeling. Drawing on unstructured text from the Peace Agreements Database and UN General Debate speeches, the study seeks to identify the factors that shape whether peace agreements endure or collapse. 
 
 ---
 
