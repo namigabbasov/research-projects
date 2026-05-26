@@ -1,0 +1,626 @@
+---
+title: "ai_motivated reasoning"
+format: html
+editor: visual
+---
+
+## Libraries
+
+```{r}
+#install.packages("performance")
+#install.packages("tidyverse")   
+#install.packages("janitor")     # Clean messy Qualtrics column names
+#install.packages("labelled")    # Manage Qualtrics labels
+#install.packages("cregg")       # Conjoint analysis (AMCE, marginal means)
+#install.packages("lme4")        # Mixed-effects regressions
+#install.packages("broom")       # Tidy model summaries
+#install.packages("sjPlot")      # Regression & AMCE visualization
+#install.packages("performance") # Model diagnostics
+#install.packages("ggthemes")    # Clean ggplot themes
+#install.packages("scales")      # Better axis formatting for plots
+#install.packages("patchwork")   # Combine multiple ggplots
+
+library(dplyr)
+library(lmerTest)
+library(tidyverse)
+library(janitor)
+library(labelled)
+#library(cregg)
+library(lme4)
+library(broom)
+library(sjPlot)
+library(ggthemes)
+library(scales)
+library(patchwork)
+library(emmeans)
+library(ggplot2)
+library(performance)
+library(ggeffects)
+```
+
+## load data
+
+```{r}
+raw <- read_csv("AI in Education_November 21, 2025_11.06.csv")
+
+### Keep only completed responses
+raw <- raw %>% filter(Progress == 100)
+
+### Check how many respondents remain
+n_distinct(raw$ResponseId)
+```
+
+## Prepare Data
+
+```{r}
+
+### define motivated reasoning question columns (48=8(claims)*3(pre-post-know)*2(decep-honest))
+cols <- c(
+  "Q33","Q37","Q38","Q104","Q108","Q109", 
+  "Q52","Q54","Q55","Q111","Q114","Q115",
+  "Q57","Q59","Q60","Q117","Q120","Q121",
+  "Q62","Q64","Q65","Q123","Q126","Q127",
+  "Q67","Q69","Q70","Q129","Q132","Q133",
+  "Q72","Q74","Q75","Q135","Q138","Q139",
+  "Q77","Q79","Q80","Q141","Q144","Q145",
+  "Q82","Q84","Q85","Q147","Q150","Q151"
+)
+
+### additional variables - add as many as wanted 
+extra_vars <- c(
+  "Q5_1","Q6","Q6_8_TEXT","Q7","Q7_6_TEXT","Q8","Q9","Q9_6_TEXT",
+  "Q183","Q184","Q14","Q15","Q16","Q17","Q235","Q22",
+  "Q26_1","Q26_2","Q26_3","Q26_4","Q26_5",
+  "Q236_1","Q236_2","Q236_3","Q236_4","Q236_5","Q236_6", "StartDate", "Duration (in seconds)"
+)
+
+
+### Convert question columns to character
+raw[cols] <- lapply(raw[cols], as.character)
+
+
+### make long_data: 24 rows per subject = 8 statements* 3 questions(pre, post, knowledge)
+long_data <- raw %>%
+  select(id, all_of(extra_vars), all_of(cols)) %>%
+  pivot_longer(
+    cols = all_of(cols),
+    names_to = "question",
+    values_to = "response"
+  ) %>%
+  filter(!is.na(response) & response != "") %>%
+  mutate(
+    response = as.numeric(response),
+    statement = case_when(
+      question %in% c("Q33","Q37","Q38","Q104","Q108","Q109") ~ "election",
+      question %in% c("Q52","Q54","Q55","Q111","Q114","Q115") ~ "vaccines",
+      question %in% c("Q57","Q59","Q60","Q117","Q120","Q121") ~ "climate",
+      question %in% c("Q62","Q64","Q65","Q123","Q126","Q127") ~ "gun_control",
+      question %in% c("Q67","Q69","Q70","Q129","Q132","Q133") ~ "great_wall",
+      question %in% c("Q72","Q74","Q75","Q135","Q138","Q139") ~ "water_boil",
+      question %in% c("Q77","Q79","Q80","Q141","Q144","Q145") ~ "bones",
+      question %in% c("Q82","Q84","Q85","Q147","Q150","Q151") ~ "lightning"
+    ),
+    condition = ifelse(question %in% c("Q33","Q37","Q38","Q52","Q54","Q55",
+                                       "Q57","Q59","Q60","Q62","Q64","Q65",
+                                       "Q67","Q69","Q70","Q72","Q74","Q75",
+                                       "Q77","Q79","Q80","Q82","Q84","Q85"),
+                       "honest", "deceptive"),
+    phase = case_when(
+      question %in% c("Q33","Q52","Q57","Q62","Q67","Q72","Q77","Q82",
+                      "Q104","Q111","Q117","Q123","Q129","Q135","Q141","Q147") ~ "pre",
+      question %in% c("Q37","Q54","Q59","Q64","Q69","Q74","Q79","Q84",
+                      "Q108","Q114","Q120","Q126","Q132","Q138","Q144","Q150") ~ "post",
+      TRUE ~ "knowledge"
+    )
+  ) %>%
+  select(id, all_of(extra_vars), statement, condition, phase, response)
+
+long_data %>% count(id) %>% summary()
+nrow(long_data) ### 8592 rows pre+post+knowledge
+
+
+### Remove background vars before pivot_wider to avoid duplicates
+clean_data <- long_data %>%
+  select(id, statement, condition, phase, response) %>%   # only necessary columns
+  distinct() %>%
+  pivot_wider(
+    names_from = phase,
+    values_from = response
+  ) %>%
+  mutate(
+    id = factor(id),
+    statement = factor(statement),
+    condition = factor(condition, levels = c("honest", "deceptive"))
+  )
+
+clean_data %>% count(id) %>% summary()
+nrow(clean_data) ### 2864 rows= each person 8 rows, one row per statement
+
+
+### merge back additional subject-level vars
+demo_vars <- raw %>%
+  select(id, all_of(extra_vars)) %>%
+  distinct()
+
+analysis_data <- left_join(clean_data, demo_vars, by = "id")
+nrow(analysis_data)
+```
+
+## Mean Pre-Post Difference
+
+Across all eight statements, the direction of belief change depends strongly on whether the AI explanation was honest or deceptive. Participants exposed to honest AI explanations tended to move slightly toward factual accuracy, reinforcing true beliefs and weakening false ones. In contrast, deceptive AI explanations consistently pushed participants away from the truth—decreasing belief in accurate statements such as “The 2020 U.S. presidential election was secure” and “Human activity is the primary cause of climate change,” while increasing belief in false claims such as “The Great Wall of China is visible from space” and “Vaccines cause more harm than the diseases they are meant to prevent.” The vaccine item, in particular, showed that even honest AI corrections produced no improvement, whereas deceptive AI explanations sharply increased endorsement of the false statement.
+
+```{r}
+### reshape analysis_data back to long format for plotting
+plot_long <- analysis_data %>%
+  select(id, statement, condition, pre, post) %>%
+  pivot_longer(cols = c(pre, post),
+               names_to = "phase",
+               values_to = "response") %>%
+  mutate(
+    phase = factor(phase, levels = c("pre", "post")),
+    condition = factor(condition, levels = c("honest", "deceptive"))
+  )
+
+## compute summary stats
+plot_data <- plot_long %>%
+  group_by(statement, condition, phase) %>%
+  summarise(
+    mean = mean(response, na.rm = TRUE),
+    se = sd(response, na.rm = TRUE) / sqrt(n()),
+    .groups = "drop"
+  )
+
+### main plot
+ggplot(plot_data, aes(x = phase, y = mean, color = condition, group = condition)) +
+  geom_point(size = 2) +
+  geom_line(linewidth = 1) +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.1) +
+  facet_wrap(~statement, scales = "free_y") +
+  labs(
+    title = "Belief Ratings before vs after AI Explanations",
+    x = "Phase",
+    y = "Mean belief rating",
+    color = "Condition"
+  ) +
+  scale_color_manual(values = c("honest" = "#009E73", "deceptive" = "#D55E00")) +
+  theme_minimal(base_size = 13) +
+  theme(
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", hjust = 0.5)
+  )
+```
+
+```{r}
+## compute summary stats
+plot_data <- plot_long %>%
+  group_by(statement, condition, phase) %>%
+  summarise(
+    mean = mean(response, na.rm = TRUE),
+    se = sd(response, na.rm = TRUE) / sqrt(n()),
+    .groups = "drop"
+  )
+
+## custom facet titles based on your actual statement variable
+statement_titles <- c(
+  "election"   = "The 2020 U.S. election was secure\nand free from widespread fraud",
+  "vaccines"   = "Vaccines cause more harm\nthan the diseases they prevent",
+  "climate"    = "Human activity is the primary\ncause of climate change",
+  "gun_control" = "Gun control laws lead to\nincreased violent crime",
+  "great_wall" = "The Great Wall of China is visible\nfrom space with the naked eye",
+  "water_boil" = "Water boils at 100°C (212°F)\nat sea level",
+  "bones"      = "The human body has 206 bones",
+  "lightning"  = "Lightning never strikes\nthe same place twice"
+)
+
+### main plot
+ggplot(plot_data, aes(x = phase, y = mean, color = condition, group = condition)) +
+  geom_point(size = 2) +
+  geom_line(linewidth = 1) +
+  geom_errorbar(aes(ymin = mean - se, ymax = mean + se), width = 0.1) +
+  facet_wrap(
+    ~statement,
+    scales = "free_y",
+    labeller = labeller(statement = statement_titles)
+  ) +
+  labs(
+    title = "Belief Ratings before vs after AI Explanations",
+    x = "Phase",
+    y = "Mean belief rating",
+    color = "Condition"
+  ) +
+  scale_color_manual(values = c("honest" = "#009E73", "deceptive" = "#D55E00")) +
+  theme_minimal(base_size = 13) +
+  theme(
+    strip.text = element_text(size = 11, face = "bold"),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", hjust = 0.5)
+  )
+
+```
+
+## Deceptive vs Honest
+
+When the AI provides honest explanations, participants’ factual beliefs shift slightly toward accuracy (β = +0.29), indicating a modest corrective effect. However, when the AI produces deceptive explanations, participants’ beliefs move sharply away from factual truth (β = −0.86). The magnitude of this negative effect is far greater than the positive gain from honesty (Δ = −1.15, p \< .001). In other words, while truthful AI can improve understanding incrementally, deceptive AI can erode it rapidly. This asymmetry underscores that the “fire” of AI explanations can either warm knowledge or burn it down—depending on the integrity of the information provided.
+
+```{r}
+
+
+### assign factual truth for each statement: 1 = True, 0 = False
+analysis_data <- analysis_data %>%
+  mutate(
+    truth_value = case_when(
+      statement %in% c("election", "climate", "water_boil", "bones") ~ 1,   
+      statement %in% c("vaccines", "gun_control", "great_wall", "lightning") ~ 0, 
+      TRUE ~ NA_real_
+    )
+  )
+
+### compute accuracy-based change: Positive = moved toward factual accuracy, Negative = moved away from factual accuracy
+analysis_data <- analysis_data %>%
+  mutate(
+    accuracy_change = ifelse(truth_value == 1, post - pre, -(post - pre))
+  )
+
+
+### first, visualize mean movement toward truth
+analysis_data %>%
+  group_by(condition) %>%
+  summarise(
+    mean_acc = mean(accuracy_change, na.rm = TRUE),
+    se = sd(accuracy_change, na.rm = TRUE) / sqrt(n())
+  ) %>%
+  ggplot(aes(x = condition, y = mean_acc, fill = condition)) +
+  geom_bar(stat = "identity", width = 0.5) +
+  geom_errorbar(aes(ymin = mean_acc - se, ymax = mean_acc + se), width = 0.2) +
+  scale_fill_manual(values = c("honest" = "#009E73", "deceptive" = "#D55E00")) +
+  labs(
+    title = "Movement Toward Factual Accuracy by AI Honesty",
+    x = "AI Condition",
+    y = "Mean Accuracy Change (Positive = More Accurate)",
+    fill="Condition"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(plot.title = element_text(face = "bold", hjust = 0.5))
+
+
+
+### now, mixed-effects model
+m_accuracy <- lmer(
+  accuracy_change ~ condition + (1 | id) + (1 | statement),
+  data = analysis_data
+)
+summary(m_accuracy)
+
+
+### Get predicted values from model
+pred <- ggpredict(m_accuracy, terms = "condition")
+
+### Plot predicted means with 95% CI
+ggplot(pred, aes(x = x, y = predicted, color = x, fill = x)) +
+  geom_col(width = 0.6, color = "black", alpha = 0.7) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.1, linewidth = 0.8) +
+  scale_color_manual(values = c("honest" = "#009E73", "deceptive" = "#D55E00")) +
+  scale_fill_manual(values = c("honest" = "#009E73", "deceptive" = "#D55E00")) +
+  labs(
+    title = "Predicted Movement Toward Factual Accuracy by AI Honesty",
+    x = "AI Condition",
+    y = "Predicted Accuracy Change (positive = more accurate)"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "none",
+    plot.title = element_text(face = "bold", hjust = 0.5)
+  )
+```
+
+## Full pipeline
+
+```{r}
+### Clean condition labels and create core outcomes
+
+analysis_data_clean <- analysis_data %>%
+  mutate(
+    condition = recode(condition, "honest" = "accurate"),
+    condition = factor(condition, levels = c("accurate", "deceptive")),
+    id = factor(id),
+    statement = factor(statement),
+    change = post - pre,
+    knowledge_c = as.numeric(scale(knowledge, center = TRUE, scale = FALSE))
+  )
+
+
+### Accuracy-change model
+
+m_accuracy_clean <- lmer(
+  accuracy_change ~ condition + (1 | id) + (1 | statement),
+  data = analysis_data_clean
+)
+
+summary(m_accuracy_clean)
+
+
+### Improved observed mean figure
+
+accuracy_summary <- analysis_data_clean %>%
+  group_by(condition) %>%
+  summarise(
+    mean_acc = mean(accuracy_change, na.rm = TRUE),
+    se = sd(accuracy_change, na.rm = TRUE) / sqrt(n()),
+    .groups = "drop"
+  )
+
+accuracy_plot<-ggplot(accuracy_summary, aes(x = condition, y = mean_acc, fill = condition)) +
+  geom_hline(yintercept = 0, linewidth = 1, color = "gray35") +
+  geom_col(width = 0.55, alpha = 0.9) +
+  geom_errorbar(
+    aes(ymin = mean_acc - se, ymax = mean_acc + se),
+    width = 0.15,
+    linewidth = 0.8
+  ) +
+  geom_text(
+    aes(label = round(mean_acc, 2)),
+    vjust = ifelse(accuracy_summary$mean_acc > 0, -1.2, 2.2),
+    size = 5,
+    fontface = "bold"
+  ) +
+  scale_fill_manual(values = c("accurate" = "#009E73", "deceptive" = "#D55E00")) +
+  labs(
+    title = "Effect of AI Explanations on Movement Toward Factual Accuracy",
+    subtitle = "Positive values indicate movement toward factual accuracy",
+    x = "AI Explanation Type",
+    y = "Mean Accuracy Change",
+    fill = "Condition"
+  ) +
+  theme_minimal(base_size = 15) +
+  theme(
+    legend.position = "none",
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+
+
+### Improved model-predicted figure
+
+pred_accuracy <- ggpredict(m_accuracy_clean, terms = "condition")
+
+pred_accuracy_plot<-ggplot(pred_accuracy, aes(x = x, y = predicted, fill = x)) +
+  geom_hline(yintercept = 0, linewidth = 1, color = "gray35") +
+  geom_col(width = 0.55, color = "black", alpha = 0.9) +
+  geom_errorbar(
+    aes(ymin = conf.low, ymax = conf.high),
+    width = 0.12,
+    linewidth = 0.9
+  ) +
+  geom_text(
+    aes(label = round(predicted, 2)),
+    vjust = ifelse(pred_accuracy$predicted > 0, -3, 4),
+    size = 5,
+    fontface = "bold"
+  ) +
+  scale_fill_manual(values = c("accurate" = "#009E73", "deceptive" = "#D55E00")) +
+  labs(
+    title = "Predicted Movement Toward Factual Accuracy by AI Explanation Type",
+    subtitle = "Mixed-effects estimates with participant and statement random intercepts",
+    x = "AI Explanation Type",
+    y = "Predicted Accuracy Change"
+  ) +
+  theme_minimal(base_size = 15) +
+  theme(
+    legend.position = "none",
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+
+
+### Knowledge moderation model
+
+m_knowledge <- lmer(
+  accuracy_change ~ condition * knowledge_c + (1 | id) + (1 | statement),
+  data = analysis_data_clean
+)
+
+summary(m_knowledge)
+
+
+### Simple slopes
+
+emm_slopes <- emtrends(m_knowledge, ~ condition, var = "knowledge_c")
+summary(emm_slopes)
+
+
+### Pairwise comparison of slopes
+
+contrast(emm_slopes, method = "pairwise")
+
+
+### Knowledge moderation visualization
+
+pred_knowledge <- ggpredict(
+  m_knowledge,
+  terms = c("knowledge_c [all]", "condition")
+)
+
+knowledge_plot<-ggplot(pred_knowledge,
+       aes(x = x, y = predicted, color = group, fill = group)) +
+
+  geom_hline(yintercept = 0,
+             linewidth = 1,
+             color = "gray35") +
+
+  geom_line(linewidth = 1.2) +
+
+  geom_ribbon(
+    aes(ymin = conf.low, ymax = conf.high),
+    alpha = 0.15,
+    color = NA
+  ) +
+
+  scale_color_manual(
+    values = c("accurate" = "#009E73",
+               "deceptive" = "#D55E00")
+  ) +
+
+  scale_fill_manual(
+    values = c("accurate" = "#009E73",
+               "deceptive" = "#D55E00")
+  ) +
+
+  labs(
+    title = "Knowledge and Susceptibility to AI Explanations",
+    subtitle = "Outcome is movement toward factual accuracy",
+    x = "Self-rated knowledge (centered)",
+    y = "Predicted Accuracy Change",
+    color = "Condition",
+    fill = "Condition"
+  ) +
+
+  theme_minimal(base_size = 15) +
+
+  theme(
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+
+
+### Controversial vs neutral issue-type model
+
+analysis_data_clean <- analysis_data_clean %>%
+  mutate(
+    issue_type = case_when(
+      statement %in% c(
+        "election",
+        "vaccines",
+        "climate",
+        "gun_control"
+      ) ~ "controversial",
+
+      statement %in% c(
+        "great_wall",
+        "water_boil",
+        "bones",
+        "lightning"
+      ) ~ "neutral"
+    ),
+
+    issue_type = factor(
+      issue_type,
+      levels = c("neutral", "controversial")
+    )
+  )
+
+m_issue <- lmer(
+  accuracy_change ~ condition * issue_type +
+    (1 | id) + (1 | statement),
+  data = analysis_data_clean
+)
+
+summary(m_issue)
+
+
+
+
+### Issue-type visualization
+
+pred_issue <- ggpredict(
+  m_issue,
+  terms = c("issue_type", "condition")
+)
+
+issue_plot<-ggplot(pred_issue,
+       aes(x = x, y = predicted, fill = group)) +
+
+  geom_hline(yintercept = 0,
+             linewidth = 1,
+             color = "gray35") +
+
+  geom_col(
+    position = position_dodge(width = 0.7),
+    width = 0.6,
+    color = "black",
+    alpha = 0.9
+  ) +
+
+  geom_errorbar(
+    aes(ymin = conf.low, ymax = conf.high),
+    width = 0.15,
+    linewidth = 0.8,
+    position = position_dodge(width = 0.7)
+  ) +
+
+  scale_fill_manual(
+    values = c("accurate" = "#009E73",
+               "deceptive" = "#D55E00")
+  ) +
+
+  labs(
+    title = "AI Explanation Effects by Issue Type",
+    subtitle = "Comparing controversial and neutral statements",
+    x = "Issue Type",
+    y = "Predicted Accuracy Change",
+    fill = "AI Explanation Type"
+  ) +
+
+  theme_minimal(base_size = 15) +
+
+  theme(
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+```
+
+```{r}
+ggsave(
+  "accuracy_observed.png",
+  plot = accuracy_plot,
+  width = 9,
+  height = 6,
+  dpi = 3000
+)
+
+ggsave(
+  "accuracy_predicted.png",
+  plot = pred_accuracy_plot,
+  width = 9,
+  height = 6,
+  dpi = 3000
+)
+
+ggsave(
+  "knowledge_moderation.png",
+  plot = knowledge_plot,
+  width = 9,
+  height = 6,
+  dpi = 3000
+)
+
+ggsave(
+  "issue_type_effects.png",
+  plot = issue_plot,
+  width = 8,
+  height = 6,
+  dpi = 3000
+)
+```
+
+## Interaction with Knowledge
+
+Interpretation 1. Main effect of condition: honest vs deceptive difference overall. 2. Main effect of knowledge: more knowledge → smaller belief shifts overall. 3. Interaction: knowledge reduces susceptibility to deceptive AI explanations. 4. Low knowledge = more misled by deception. 5. High knowledge = more resistant, possibly even corrected.
+
+```{r}
+
+```
+
+```{r}
+### Does deceptive AI shift beliefs more for controversial issues?
+
+
+```
+
+```{r}
+
+```
