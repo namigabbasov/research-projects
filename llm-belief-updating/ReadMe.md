@@ -6,6 +6,10 @@ Experimental evidence on how accurate and deceptive AI explanations shape belief
 ![Methods](https://img.shields.io/badge/methods-experimental_design-blue)
 ![Focus](https://img.shields.io/badge/focus-LLM_belief_updating-purple)
 
+
+
+![Movement Toward Factual Accuracy](figures/issue_type_effects.png)
+
 ---
 
 ## Overview
