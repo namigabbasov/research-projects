@@ -9,6 +9,7 @@ Experimental evidence on how accurate and deceptive AI explanations shape belief
 
 
 ![Movement Toward Factual Accuracy](figures/issue_type_effects.png)
+---
 ![Statements](figures/statements.png)
 
 ---
