@@ -1,0 +1,895 @@
+---
+title: "AI in Education"
+author: "Namig Abbasov"
+format: html
+editor: visual
+---
+
+## Libraries
+
+```{r}
+#install.packages("tidyverse")   
+#install.packages("janitor")     # Clean messy Qualtrics column names
+#install.packages("labelled")    # Manage Qualtrics labels
+#install.packages("cregg")       # Conjoint analysis (AMCE, marginal means)
+#install.packages("lme4")        # Mixed-effects regressions
+#install.packages("broom")       # Tidy model summaries
+#install.packages("sjPlot")      # Regression & AMCE visualization
+#install.packages("performance") # Model diagnostics
+#install.packages("ggthemes")    # Clean ggplot themes
+#install.packages("scales")      # Better axis formatting for plots
+#install.packages("patchwork")   # Combine multiple ggplots
+
+
+library(tidyverse)
+library(janitor)
+library(labelled)
+#library(cregg)
+library(lme4)
+library(broom)
+library(sjPlot)
+library(performance)
+library(ggthemes)
+library(scales)
+library(patchwork)
+library(emmeans)
+library(ggplot2)
+library(broom.mixed)
+library(dplyr)
+```
+
+## Load Data
+
+```{r}
+raw <- read_csv("AI in Education_November 21, 2025_11.06.csv")
+
+### Keep only completed responses
+raw <- raw %>% filter(Progress == 100)
+
+### Check how many respondents remain
+n_distinct(raw$ResponseId)
+```
+
+## Reshape
+
+```{r}
+### Gather only conjoint columns (Q157–Q191)
+conjoint_long <- raw %>%
+  pivot_longer(
+    cols = matches("^Q1(57|59|61|63|65|67|69|71|73|75|77|79|81|83|85|87|89|91)_\\d+$"),
+    names_to = c("qid", "dv_num"),
+    names_pattern = "(Q\\d+)_(\\d+)",
+    values_to = "rating"
+  ) %>%
+  mutate(
+    dv = case_when(
+      dv_num == "1" ~ "usefulness",
+      dv_num == "2" ~ "support_slider",
+      dv_num == "3" ~ "autonomy"
+    )
+  )
+
+### create lookup for profile attributes
+profile_lookup <- tribble(
+  ~qid, ~profile_id, ~materials, ~grading, ~support,
+  "Q157", 1, "No AI", "Human only", "No chatbot",
+  "Q159", 2, "No AI", "Human only", "Chatbot",
+  "Q161", 3, "No AI", "AI reviewed", "No chatbot",
+  "Q163", 4, "No AI", "AI reviewed", "Chatbot",
+  "Q165", 5, "No AI", "AI unreviewed", "No chatbot",
+  "Q167", 6, "No AI", "AI unreviewed", "Chatbot",
+  "Q169", 7, "AI reviewed", "Human only", "No chatbot",
+  "Q171", 8, "AI reviewed", "Human only", "Chatbot",
+  "Q173", 9, "AI reviewed", "AI reviewed", "No chatbot",
+  "Q175", 10, "AI reviewed", "AI reviewed", "Chatbot",
+  "Q177", 11, "AI reviewed", "AI unreviewed", "No chatbot",
+  "Q179", 12, "AI reviewed", "AI unreviewed", "Chatbot",
+  "Q181", 13, "AI unreviewed", "Human only", "No chatbot",
+  "Q183", 14, "AI unreviewed", "Human only", "Chatbot",
+  "Q185", 15, "AI unreviewed", "AI reviewed", "No chatbot",
+  "Q187", 16, "AI unreviewed", "AI reviewed", "Chatbot",
+  "Q189", 17, "AI unreviewed", "AI unreviewed", "No chatbot",
+  "Q191", 18, "AI unreviewed", "AI unreviewed", "Chatbot"
+)
+
+### Merge lookup and reshape so each profile is one row per participant
+conjoint_clean <- conjoint_long %>%
+  left_join(profile_lookup, by = "qid") %>%
+  filter(!is.na(rating)) %>%   # keep only answered profiles
+  pivot_wider(
+    id_cols = c(ResponseId, profile_id, materials, grading, support),
+    names_from = dv,
+    values_from = rating
+  )
+
+### check results
+glimpse(conjoint_clean)
+nrow(conjoint_clean)            
+n_distinct(conjoint_clean$ResponseId)
+```
+
+## Prepare IVs
+```{r}
+conjoint_clean <- conjoint_clean %>%
+  mutate(
+    materials = factor(materials,
+                       levels = c("No AI", "AI reviewed", "AI unreviewed")),
+    grading = factor(grading,
+                     levels = c("Human only", "AI reviewed", "AI unreviewed")),
+    support = factor(support,
+                     levels = c("No chatbot", "Chatbot"))
+  )
+```
+
+
+```{r}
+### base
+summary(conjoint_clean$usefulness)
+summary(conjoint_clean$support_slider)
+summary(conjoint_clean$autonomy)
+
+### tidy overview
+conjoint_clean %>%
+  summarise(
+    N = n(),
+    respondents = n_distinct(ResponseId),
+    mean_usefulness = mean(as.numeric(usefulness), na.rm=TRUE),
+    sd_usefulness   = sd(as.numeric(usefulness), na.rm=TRUE),
+    mean_support    = mean(as.numeric(support_slider), na.rm=TRUE),
+    sd_support      = sd(as.numeric(support_slider), na.rm=TRUE),
+    mean_autonomy   = mean(as.numeric(autonomy), na.rm=TRUE),
+    sd_autonomy     = sd(as.numeric(autonomy), na.rm=TRUE)
+  )
+```
+
+## EDA
+
+```{r}
+### Ensure numeric
+conjoint_clean <- conjoint_clean %>%
+  mutate(
+    usefulness = as.numeric(usefulness),
+    support_slider = as.numeric(support_slider),
+    autonomy = as.numeric(autonomy)
+  )
+
+### Publication theme
+pub_theme <- theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    axis.title.x = element_text(margin = margin(t = 8)),
+    axis.title.y = element_text(margin = margin(r = 8)),
+    panel.grid.minor = element_blank()
+  )
+
+### Histogram function with optional y-axis label
+plot_dist <- function(var, title, show_y = FALSE) {
+  ggplot(conjoint_clean, aes(x = {{ var }})) +
+    geom_histogram(
+      bins = 20,
+      boundary = 0,
+      closed = "left",
+      color = "white",
+      linewidth = 0.3
+    ) +
+    geom_vline(xintercept = 50, linetype = "dashed", linewidth = 0.6) +
+    scale_x_continuous(
+      limits = c(0, 100),
+      breaks = seq(0, 100, 20)
+    ) +
+    labs(
+      title = title,
+      x = "Rating (0–100)",
+      y = if (show_y) "Number of Profiles" else NULL
+    ) +
+    pub_theme +
+    theme(
+      axis.title.y = if (show_y) element_text() else element_blank(),
+      axis.text.y  = if (show_y) element_text() else element_blank(),
+      axis.ticks.y = if (show_y) element_line() else element_blank()
+    )
+}
+
+### Build plots
+p_use <- plot_dist(usefulness, "Perceived Usefulness", show_y = TRUE)
+p_sup <- plot_dist(support_slider, "Support for AI Policies")
+p_aut <- plot_dist(autonomy, "Perceived Autonomy")
+
+### Combine
+(p_use | p_sup | p_aut) +
+  plot_annotation(
+    title = "",
+    theme = theme(
+      plot.title = element_text(face = "bold", size = 15, hjust = 0.5)
+    )
+  )
+
+```
+
+```{r}
+### prepare long-format DV data (raw, observed)
+dv_long <- conjoint_clean %>%
+  select(usefulness, support_slider, autonomy,
+         materials, grading, support) %>%
+  pivot_longer(
+    cols = c(usefulness, support_slider, autonomy),
+    names_to = "dv",
+    values_to = "value"
+  ) %>%
+  mutate(
+    value = as.numeric(value),
+    dv = recode(
+      dv,
+      "usefulness" = "Perceived Usefulness",
+      "support_slider" = "Support for AI Policies",
+      "autonomy" = "Perceived Autonomy"
+    )
+  )
+
+### stack IVs and create facet-specific level codes
+dv_iv_long <- dv_long %>%
+  pivot_longer(
+    cols = c(materials, grading, support),
+    names_to = "attribute",
+    values_to = "level"
+  ) %>%
+  mutate(
+    attribute = recode(
+      attribute,
+      "grading"   = "Assessments & Grading",
+      "materials" = "Instructional Materials",
+      "support"   = "Personalized Support"
+    ),
+    plot_level = case_when(
+      attribute == "Assessments & Grading"   ~ paste0("G_", level),
+      attribute == "Instructional Materials" ~ paste0("M_", level),
+      attribute == "Personalized Support"    ~ paste0("S_", level)
+    )
+  )
+
+### enforce correct level order within each facet
+dv_iv_long$plot_level <- factor(
+  dv_iv_long$plot_level,
+  levels = c(
+    # Grading
+    "G_Human only", "G_AI reviewed", "G_AI unreviewed",
+    # Materials
+    "M_No AI", "M_AI reviewed", "M_AI unreviewed",
+    # Support
+    "S_No chatbot", "S_Chatbot"
+  )
+)
+
+dv_iv_long$attribute <- factor(
+  dv_iv_long$attribute,
+  levels = c(
+    "Assessments & Grading",
+    "Instructional Materials",
+    "Personalized Support"
+  )
+)
+
+### Colors (oversight-based)
+level_colors <- c(
+  "G_Human only"   = "#2B2B2B",
+  "G_AI reviewed"  = "#1F78B4",
+  "G_AI unreviewed"= "#D7301F",
+  "M_No AI"        = "#636363",
+  "M_AI reviewed"  = "#1F78B4",
+  "M_AI unreviewed"= "#D7301F",
+  "S_No chatbot"   = "#636363",
+  "S_Chatbot"      = "#BDBDBD"
+)
+
+### Final plot
+final_eda_plot <- ggplot(
+  dv_iv_long,
+  aes(x = plot_level, y = value, fill = plot_level)
+) +
+  geom_boxplot(width = 0.6, outlier.alpha = 1) +
+  coord_cartesian(ylim = c(0, 100)) +
+  facet_grid(
+    dv ~ attribute,
+    scales = "free_x",
+    switch = "y"
+  ) +
+  scale_fill_manual(values = level_colors) +
+  scale_x_discrete(labels = function(x) sub("^[A-Z]_", "", x)) +
+  guides(fill = "none") +
+  labs(
+    x = NULL,
+    y = "Rating (0–100)"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    strip.text.y.left = element_text(face = "bold"),
+    strip.text.x = element_text(face = "bold"),
+    panel.grid.minor = element_blank(),
+    axis.text.x = element_text(size = 11)
+  )
+
+print(final_eda_plot)
+```
+
+## Models
+
+```{r}
+model_usefulness <- lmer(as.numeric(usefulness) ~ materials + grading + support + (1 | ResponseId),
+                         data = conjoint_clean)
+
+model_support <- lmer(as.numeric(support_slider) ~ materials + grading + support + (1 | ResponseId),
+                      data = conjoint_clean)
+
+model_autonomy <- lmer(as.numeric(autonomy) ~ materials + grading + support + (1 | ResponseId),
+                       data = conjoint_clean)
+```
+
+## Marginal Means
+- Three graphs, one for each outcome variable. 
+- Shows predicted outcome for a full profile, e.g. No AI + Human Only + No Chatbot
+- Shouldn't go to paper as profiles are not what readers care for
+- Conjoints are usually interpreted at the attribute level, not the profile level.
+```{r}
+emm_usefulness <- emmeans(model_usefulness, ~ materials + grading + support)
+emm_support    <- emmeans(model_support,    ~ materials + grading + support)
+emm_autonomy   <- emmeans(model_autonomy,   ~ materials + grading + support)
+
+
+### Usefulness
+plot(emm_usefulness, comparisons = TRUE) +
+  labs(title = "Perceived Usefulness of AI Course Policies",
+       y = "Predicted Rating (0–100)") +
+  theme_minimal(base_size = 13)
+
+### Support
+plot(emm_support, comparisons = TRUE) +
+  labs(title = "Support for AI Course Policies",
+       y = "Predicted Rating (0–100)") +
+  theme_minimal(base_size = 13)
+
+### Autonomy
+plot(emm_autonomy, comparisons = TRUE) +
+  labs(title = "Perceived Autonomy under AI Course Policies",
+       y = "Predicted Rating (0–100)") +
+  theme_minimal(base_size = 13)
+```
+
+## Separate - 3 combined
+
+```{r}
+### Usefulness
+emm_use_mat <- emmeans(model_usefulness, ~ materials)
+emm_use_grad <- emmeans(model_usefulness, ~ grading)
+emm_use_sup <- emmeans(model_usefulness, ~ support)
+
+### Support
+emm_sup_mat <- emmeans(model_support, ~ materials)
+emm_sup_grad <- emmeans(model_support, ~ grading)
+emm_sup_sup <- emmeans(model_support, ~ support)
+
+### Autonomy
+emm_aut_mat <- emmeans(model_autonomy, ~ materials)
+emm_aut_grad <- emmeans(model_autonomy, ~ grading)
+emm_aut_sup <- emmeans(model_autonomy, ~ support)
+
+### function to make clean plots
+plot_emm <- function(emm_obj, title, y_label) {
+  plot(emm_obj, comparisons = FALSE) +
+    labs(title = title,
+         x = "Predicted Rating (0–100)",
+         y = y_label) +
+    theme_minimal(base_size = 13)
+}
+
+### usefulness plots
+p_use_mat <- plot_emm(emm_use_mat, "Perceived Usefulness", "Materials")
+p_use_grad <- plot_emm(emm_use_grad, "Perceived Usefulness", "Assessment & Grading")
+p_use_sup <- plot_emm(emm_use_sup, "Perceived Usefulness", "Personalized Support")
+
+### support plots
+p_sup_mat <- plot_emm(emm_sup_mat, "Support for AI Policies", "Materials")
+p_sup_grad <- plot_emm(emm_sup_grad, "Support for AI Policies", "Assessment & Grading")
+p_sup_sup <- plot_emm(emm_sup_sup, "Support for AI Policies", "Personalized Support")
+
+### autonomy plots
+p_aut_mat <- plot_emm(emm_aut_mat, "Perceived Autonomy", "Materials")
+p_aut_grad <- plot_emm(emm_aut_grad, "Perceived Autonomy", "Assessment & Grading")
+p_aut_sup <- plot_emm(emm_aut_sup, "Perceived Autonomy", "Personalized Support")
+
+### combine plots per DV
+(p_use_mat | p_use_grad | p_use_sup) + plot_annotation(title = "Perceived Usefulness")
+(p_sup_mat | p_sup_grad | p_sup_sup) + plot_annotation(title = "Support for AI Course Policies")
+(p_aut_mat | p_aut_grad | p_aut_sup) + plot_annotation(title = "Perceived Autonomy")
+```
+
+## Separate - 9
+```{r}
+### helper plotting function
+plot_emm <- function(model, variable, title, file_name) {
+  emm <- emmeans(model, as.formula(paste0("~ ", variable)))
+  p <- plot(emm, comparisons = FALSE) +
+    labs(title = title,
+         x = "Predicted Rating (0–100)",
+         y = variable) +
+    theme_minimal(base_size = 13)
+  
+  ggsave(filename = file_name, plot = p, width = 7, height = 5, dpi = 300)
+  print(p)
+}
+
+### USEFULNESS
+plot_emm(model_usefulness, "materials",
+          "Perceived Usefulness by Course Materials",
+          "usefulness_materials.png")
+
+plot_emm(model_usefulness, "grading",
+          "Perceived Usefulness by Grading Policy",
+          "usefulness_grading.png")
+
+plot_emm(model_usefulness, "support",
+          "Perceived Usefulness by Chatbot Support",
+          "usefulness_support.png")
+
+### SUPPORT
+plot_emm(model_support, "materials",
+          "Support for AI Policies by Course Materials",
+          "support_materials.png")
+
+plot_emm(model_support, "grading",
+          "Support for AI Policies by Grading Policy",
+          "support_grading.png")
+
+plot_emm(model_support, "support",
+          "Support for AI Policies by Chatbot Support",
+          "support_support.png")
+
+### AUTONOMY
+plot_emm(model_autonomy, "materials",
+          "Perceived Autonomy by Course Materials",
+          "autonomy_materials.png")
+
+plot_emm(model_autonomy, "grading",
+          "Perceived Autonomy by Grading Policy",
+          "autonomy_grading.png")
+
+plot_emm(model_autonomy, "support",
+          "Perceived Autonomy by Chatbot Support",
+          "autonomy_support.png")
+
+```
+## Coefficient plots
+```{r}
+### AMCE extraction
+get_amce <- function(model, outcome_label) {
+  tidy(model, effects = "fixed", conf.int = TRUE) %>%
+    filter(term != "(Intercept)") %>%
+    mutate(
+      outcome = outcome_label,
+      attribute = case_when(
+        grepl("^materials", term) ~ "Instructional Materials",
+        grepl("^grading", term) ~ "Assessments & Grading",
+        grepl("^support", term) ~ "Personalized Support"
+      ),
+      level = case_when(
+        term == "materialsAI reviewed" ~ "AI reviewed",
+        term == "materialsAI unreviewed" ~ "AI unreviewed",
+        term == "gradingAI reviewed" ~ "AI reviewed",
+        term == "gradingAI unreviewed" ~ "AI unreviewed",
+        term == "supportChatbot" ~ "Chatbot available",
+        TRUE ~ term
+      ),
+      level = factor(
+        level,
+        levels = c(
+          "AI unreviewed",
+          "AI reviewed",
+          "Chatbot available"
+        )
+      ),
+      attribute = factor(
+        attribute,
+        levels = c(
+          "Assessments & Grading",
+          "Instructional Materials",
+          "Personalized Support"
+        )
+      )
+    )
+}
+
+amce_all <- bind_rows(
+  get_amce(model_usefulness, "Perceived Usefulness"),
+  get_amce(model_support, "Support for AI Course Policies"),
+  get_amce(model_autonomy, "Perceived Autonomy")
+)
+
+
+### plot function 
+plot_amce <- function(data, outcome_name) {
+  ggplot(
+    filter(data, outcome == outcome_name),
+    aes(x = estimate, y = level)
+  ) +
+    geom_vline(
+      xintercept = 0,
+      linetype = "dashed",
+      linewidth = 0.8,
+      color = "gray35"
+    ) +
+    geom_errorbarh(
+      aes(xmin = conf.low, xmax = conf.high),
+      height = 0.18,
+      linewidth = 0.8,
+      color = "gray25"
+    ) +
+    geom_point(
+      size = 3,
+      color = "#008C7A"
+    ) +
+    facet_wrap(
+      ~ attribute,
+      scales = "free_y",
+      nrow = 1
+    ) +
+    scale_x_continuous(
+      limits = c(-25, 5),
+      breaks = seq(-25, 5, 5)
+    ) +
+    labs(
+      title = paste0("Effects of AI Policy Design on ", outcome_name),
+      subtitle = "Reference categories: no AI materials, human grading, and no chatbot",
+      x = "Average Marginal Component Effect (0–100 scale)",
+      y = NULL
+    ) +
+    theme_minimal(base_size = 14) +
+    theme(
+      plot.title = element_text(face = "bold", hjust = 0.5, size = 18),
+      plot.subtitle = element_text(hjust = 0.5, size = 14),
+      strip.text = element_text(face = "bold", size = 13),
+      panel.grid.minor = element_blank(),
+      axis.text.y = element_text(size = 12),
+      axis.text.x = element_text(size = 11),
+      axis.title.x = element_text(size = 13, margin = margin(t = 8))
+    )
+}
+
+
+### Generate plots
+
+amce_usefulness_plot <- plot_amce(amce_all, "Perceived Usefulness")
+amce_support_plot <- plot_amce(amce_all, "Support for AI Course Policies")
+amce_autonomy_plot <- plot_amce(amce_all, "Perceived Autonomy")
+
+amce_usefulness_plot
+amce_support_plot
+amce_autonomy_plot
+
+### Save
+ggsave(
+  "figures/amce_usefulness.png",
+  amce_usefulness_plot,
+  width = 13,
+  height = 5,
+  dpi = 300,
+  bg = "white"
+)
+
+ggsave(
+  "figures/amce_support.png",
+  amce_support_plot,
+  width = 13,
+  height = 5,
+  dpi = 300,
+  bg = "white"
+)
+
+ggsave(
+  "figures/amce_autonomy.png",
+  amce_autonomy_plot,
+  width = 13,
+  height = 5,
+  dpi = 300,
+  bg = "white"
+)
+```
+
+### full first graph
+```{r}
+get_amce <- function(model, outcome_label) {
+  tidy(model, effects = "fixed", conf.int = TRUE) %>%
+    filter(term != "(Intercept)") %>%
+    mutate(
+      outcome = outcome_label,
+      attribute = case_when(
+        grepl("^materials", term) ~ "Instructional Materials",
+        grepl("^grading", term) ~ "Assessments & Grading",
+        grepl("^support", term) ~ "Personalized Support"
+      ),
+      level = case_when(
+        term == "materialsAI reviewed" ~ "AI reviewed by instructor",
+        term == "materialsAI unreviewed" ~ "AI without review",
+        term == "gradingAI reviewed" ~ "AI reviewed by instructor",
+        term == "gradingAI unreviewed" ~ "AI without review",
+        term == "supportChatbot" ~ "Course chatbot",
+        TRUE ~ term
+      ),
+      level = factor(
+        level,
+        levels = c(
+          "AI reviewed by instructor",
+          "AI without review",
+          "Course chatbot"
+        )
+      ),
+      attribute = factor(
+        attribute,
+        levels = c(
+          "Assessments & Grading",
+          "Instructional Materials",
+          "Personalized Support"
+        )
+      )
+    )
+}
+
+amce_all <- bind_rows(
+  get_amce(model_usefulness, "Perceived Usefulness"),
+  get_amce(model_support, "Support for AI Course Policies"),
+  get_amce(model_autonomy, "Perceived Autonomy")
+)
+
+
+
+support_oversight_plot <- ggplot(
+  filter(amce_all, outcome == "Support for AI Course Policies"),
+  aes(x = estimate, y = level)
+) +
+  geom_vline(
+    xintercept = 0,
+    linetype = "dashed",
+    linewidth = 0.8,
+    color = "gray35"
+  ) +
+  geom_errorbarh(
+    aes(xmin = conf.low, xmax = conf.high),
+    height = 0.18,
+    linewidth = 0.8,
+    color = "gray25"
+  ) +
+  geom_point(
+    size = 3,
+    color = "#008C7A"
+  ) +
+  facet_wrap(
+    ~ attribute,
+    scales = "free_y",
+    nrow = 1
+  ) +
+  scale_x_continuous(
+    limits = c(-25, 5),
+    breaks = seq(-25, 5, 5)
+  ) +
+  labs(
+    title = "Student Support for AI Integration Depends on Human Oversight",
+    subtitle = "Points indicate changes in support relative to fully human course policies",
+    x = "Estimated Effect on Support (0–100 scale)",
+    y = NULL,
+    caption = "Negative values indicate lower support compared with fully human instructional materials, grading, and support."
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 18),
+    plot.subtitle = element_text(hjust = 0.5, size = 13),
+    plot.caption = element_text(hjust = 0.5, size = 10, color = "gray35"),
+    strip.text = element_text(face = "bold", size = 13),
+    panel.grid.minor = element_blank(),
+    axis.text.y = element_text(size = 12),
+    axis.text.x = element_text(size = 11),
+    axis.title.x = element_text(size = 13, margin = margin(t = 8))
+  )
+
+support_oversight_plot
+
+ggsave(
+  "figures/support_oversight_plot.png",
+  support_oversight_plot,
+  width = 13,
+  height = 5,
+  dpi = 300,
+  bg = "white"
+)
+```
+
+### clean viz
+```{r}
+featured_data <- tibble(
+  policy = c(
+    "AI with\ninstructor review",
+    "AI without\ninstructor review"
+  ),
+  effect = c(-5, -20)
+)
+
+featured_plot <- ggplot(
+  featured_data,
+  aes(
+    x = effect,
+    y = reorder(policy, effect),
+    fill = policy
+  )
+) +
+  geom_vline(
+    xintercept = 0,
+    linewidth = 1.3,
+    color = "grey35"
+  ) +
+  geom_col(
+    width = 0.55,
+    show.legend = FALSE
+  ) +
+  geom_text(
+    aes(
+      label = sprintf("%.0f", effect),
+      x = effect - 2.5
+    ),
+    size = 10,
+    fontface = "bold"
+  ) +
+  scale_fill_manual(
+    values = c(
+      "AI with\ninstructor review" = "#B89B88",
+      "AI without\ninstructor review" = "#D55E00"
+    )
+  ) +
+  scale_x_continuous(
+    limits = c(-25, 3),
+    breaks = NULL
+  ) +
+  labs(
+    title = "AI in Higher Education",
+    subtitle = "Effects of instructor oversight on student support"
+  ) +
+  theme_void(base_size = 18) +
+  theme(
+    plot.title = element_text(
+      size = 30,
+      face = "bold",
+      hjust = 0.5
+    ),
+    plot.subtitle = element_text(
+      size = 16,
+      hjust = 0.5,
+      margin = margin(b = 25)
+    ),
+    axis.text.y = element_text(
+      size = 18,
+      face = "bold",
+      color = "grey20",
+      lineheight = 0.95
+    ),
+    plot.margin = margin(
+      t = 30,
+      r = 40,
+      b = 30,
+      l = 40
+    )
+  )
+
+featured_plot
+
+ggsave(
+  "figures/featured_high_ed.png",
+  featured_plot,
+  width = 8,
+  height = 5,
+  dpi = 300,
+  bg = "white"
+)
+```
+
+
+## coefficient plots combined
+```{r}
+get_coefficients <- function(model, outcome_label) {
+  tidy(model, effects = "fixed", conf.int = TRUE) %>%
+    filter(term != "(Intercept)") %>%
+    mutate(
+      outcome = outcome_label,
+      attribute = case_when(
+        grepl("^materials", term) ~ "Instructional Materials",
+        grepl("^grading", term) ~ "Assessments & Grading",
+        grepl("^support", term) ~ "Personalized Support"
+      ),
+      level = case_when(
+        term == "materialsAI reviewed" ~ "Materials: AI reviewed",
+        term == "materialsAI unreviewed" ~ "Materials: AI unreviewed",
+        term == "gradingAI reviewed" ~ "Grading: AI reviewed",
+        term == "gradingAI unreviewed" ~ "Grading: AI unreviewed",
+        term == "supportChatbot" ~ "Support: Chatbot available",
+        TRUE ~ term
+      ),
+      level = factor(
+        level,
+        levels = c(
+          "Support: Chatbot available",
+          "Grading: AI reviewed",
+          "Grading: AI unreviewed",
+          "Materials: AI reviewed",
+          "Materials: AI unreviewed"
+        )
+      ),
+      outcome = factor(
+        outcome,
+        levels = c(
+          "Perceived Usefulness",
+          "Support for AI Course Policies",
+          "Perceived Autonomy"
+        )
+      )
+    )
+}
+
+coef_all <- bind_rows(
+  get_coefficients(model_usefulness, "Perceived Usefulness"),
+  get_coefficients(model_support, "Support for AI Course Policies"),
+  get_coefficients(model_autonomy, "Perceived Autonomy")
+)
+
+
+
+
+coef_combined_plot <- ggplot(
+  coef_all,
+  aes(x = estimate, y = level, color = outcome)
+) +
+  geom_vline(
+    xintercept = 0,
+    linetype = "dashed",
+    linewidth = 0.8,
+    color = "gray35"
+  ) +
+  geom_errorbarh(
+    aes(xmin = conf.low, xmax = conf.high),
+    height = 0.18,
+    linewidth = 0.8,
+    position = position_dodge(width = 0.55)
+  ) +
+  geom_point(
+    size = 2.8,
+    position = position_dodge(width = 0.55)
+  ) +
+  scale_x_continuous(
+    limits = c(-25, 5),
+    breaks = seq(-25, 5, 5)
+  ) +
+  labs(
+    title = "Effects of AI Policy Design on Student Evaluations",
+    subtitle = "Reference categories: no AI materials, human grading, and no chatbot",
+    x = "Estimated Effect on Rating (0–100 scale)",
+    y = NULL,
+    color = "Outcome"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 18),
+    plot.subtitle = element_text(hjust = 0.5, size = 13),
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold"),
+    panel.grid.minor = element_blank(),
+    axis.text.y = element_text(size = 12),
+    axis.text.x = element_text(size = 11),
+    axis.title.x = element_text(size = 13, margin = margin(t = 8))
+  )
+
+coef_combined_plot
+
+ggsave(
+  "figures/coefficient_plot_combined.png",
+  coef_combined_plot,
+  width = 11,
+  height = 6,
+  dpi = 300,
+  bg = "white"
+)
+```
+
