@@ -83,7 +83,7 @@ Participants rated each profile on 0–100 scales:
 
 The largest negative effects occur when AI operates without instructor review.
 
-![Human Oversight](figures/featured_higher_ed.png)
+![Human Oversight](figures/featured_high_ed.png)
 
 ---
 
@@ -91,7 +91,7 @@ The largest negative effects occur when AI operates without instructor review.
 
 Students strongly penalize unreviewed AI systems, especially when used for grading and instructional materials.
 
-![Perceived Usefulness](figures/perceived_usefulness_amce.png)
+![Perceived Usefulness](figures/amce_usefulness.png)
 
 ---
 
@@ -99,7 +99,7 @@ Students strongly penalize unreviewed AI systems, especially when used for gradi
 
 Support for AI adoption depends heavily on whether instructors remain involved in reviewing AI outputs.
 
-![Support for Adoption](figures/support_amce.png)
+![Support for Adoption](figures/amce_support.png)
 
 ---
 
@@ -107,7 +107,7 @@ Support for AI adoption depends heavily on whether instructors remain involved i
 
 Students report lower autonomy when AI assumes responsibility for instructional or evaluative decisions without human oversight.
 
-![Perceived Autonomy](figures/autonomy_amce.png)
+![Perceived Autonomy](figures/amce_autonomy.png)
 
 ---
 
@@ -119,7 +119,7 @@ Coefficient estimates across all outcomes reveal a consistent pattern.
 - AI with instructor review produces substantially smaller effects.
 - Course chatbots have little impact.
 
-![Coefficient Plot](figures/coefficient_plot.png)
+![Coefficient Plot](figures/combined.png)
 
 ---
 
